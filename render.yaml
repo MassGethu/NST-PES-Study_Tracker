@@ -1,0 +1,23 @@
+databases:
+  - name: nst-tracker-db
+    plan: free
+    databaseName: nst_tracker
+    user: nst_tracker
+
+services:
+  - type: web
+    name: nst-study-tracker
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm --prefix api ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nst-tracker-db
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
