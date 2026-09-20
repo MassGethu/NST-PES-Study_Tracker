@@ -44,7 +44,7 @@ function fmtSecs(s) {
 const DIFF_LABELS = ['', 'Very Easy', 'Easy', 'Medium', 'Hard', 'Very Hard'];
 
 export default function LogLecturePage() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, isWorksheet } = useStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -357,14 +357,14 @@ export default function LogLecturePage() {
             </div>
 
             {/* Contest relevance */}
-            <div className="form-group">
+            {!isWorksheet && <div className="form-group">
               <label className="form-label">Contest Relevance</label>
               <select value={contestRel} onChange={e => setContestRel(e.target.value)} id="ll-relevance">
                 <option>Low</option>
                 <option>Medium</option>
                 <option>High</option>
               </select>
-            </div>
+            </div>}
 
             {/* Needs revision */}
             <div className="form-group" style={{ justifyContent: 'flex-end' }}>

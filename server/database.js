@@ -30,6 +30,7 @@ async function initializeDatabase() {
   if (!isDatabaseConfigured()) return false;
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await getPool().query(schema);
+  await require('./provision').provisionAccounts(getPool());
   await getPool().query('DELETE FROM sessions WHERE expires_at <= NOW()');
   return true;
 }

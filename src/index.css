@@ -76,6 +76,35 @@
   --bottom-nav-height: 64px;
 }
 
+/* Scoped to Rithika's authenticated session; the default NST tokens stay intact. */
+:root[data-theme="worksheet"] {
+  --bg-base: #fff5f9;
+  --bg-surface: #fffafd;
+  --bg-card: #ffffff;
+  --bg-elevated: #fce7f1;
+  --bg-hover: #f9d9e8;
+  --border: #ecc4d8;
+  --border-subtle: #f4dfeb;
+  --accent: #ba3978;
+  --accent-light: #d45191;
+  --accent-glow: rgba(186,57,120,.16);
+  --accent-dim: rgba(186,57,120,.10);
+  --text-primary: #492239;
+  --text-secondary: #80556e;
+  --text-muted: #94647e;
+  --text-accent: #a72967;
+  --green: #247750;
+  --green-dim: #e0f2e8;
+  --yellow: #956006;
+  --yellow-dim: #fff2d5;
+  --red: #b92c4d;
+  --red-dim: #fde3e9;
+  --shadow: 0 4px 20px rgba(95,36,67,.08);
+}
+
+.login-shell { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.login-card { width: 100%; max-width: 440px; }
+
 /* ── Reset ───────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

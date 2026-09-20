@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "test": "node --test src/store/*.test.js server/*.test.cjs",
     "dev": "concurrently -k -n \"API,Vite\" -c \"cyan,magenta\" \"npm run api\" \"vite\"",
     "api": "node server/server.js",
     "build": "vite build",

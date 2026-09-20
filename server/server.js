@@ -43,7 +43,6 @@ app.use('/api/auth', authRouter);
 app.use('/api/state', optionalUser, stateRouter);
 
 function requireAccountWhenHosted(req, res, next) {
-  if (!isDatabaseConfigured()) return next();
   return optionalUser(req, res, error => {
     if (error) return next(error);
     return requireUser(req, res, next);

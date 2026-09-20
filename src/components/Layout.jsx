@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { today, fmtDate } from '../store/utils.js';
 import CarryForwardPrompt from './CarryForwardPrompt.jsx';
+import { useStore } from '../store/StoreContext.jsx';
 
 const NAV_ITEMS = [
   { to: '/',         icon: '🏠', label: 'Dashboard' },
@@ -15,6 +16,9 @@ const NAV_ITEMS = [
 
 export default function Layout({ children }) {
   const todayStr = fmtDate(today());
+  const { isWorksheet } = useStore();
+  const navItems = NAV_ITEMS.map(item => isWorksheet && item.to === '/contest'
+    ? { to: '/worksheets', icon: '🌷', label: 'Worksheets' } : item);
 
   return (
     <div className="app-shell">
@@ -23,12 +27,12 @@ export default function Layout({ children }) {
         <div className="sidebar-logo">
           <div className="logo-icon">N</div>
           <div>
-            <div className="logo-text">NST Tracker</div>
-            <div className="logo-sub">Newton School of Technology</div>
+            <div className="logo-text">{isWorksheet ? 'Rithika’s Study Space' : 'NST Tracker'}</div>
+            <div className="logo-sub">{isWorksheet ? 'A little progress, every day' : 'Newton School of Technology'}</div>
           </div>
         </div>
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(item => (
+          {navItems.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -62,7 +66,7 @@ export default function Layout({ children }) {
       {/* Bottom nav (mobile) */}
       <nav className="bottom-nav">
         <div className="bottom-nav-inner">
-          {NAV_ITEMS.map(item => (
+          {navItems.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -87,6 +91,7 @@ function PageTitle() {
     '/calendar': '📅 Calendar',
     '/log':      '📝 Lecture Log',
     '/contest':  '🏆 Contest Tracker',
+    '/worksheets': '🌷 Worksheet Tracker',
     '/revision': '🔄 Revision Queue',
     '/recall': '🧠 Active Recall',
     '/settings': '⚙️ Settings',

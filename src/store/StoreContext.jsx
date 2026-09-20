@@ -4,12 +4,10 @@
  */
 
 import React, { createContext, useContext, useReducer, useEffect, useMemo, useRef, useState } from 'react';
-import { loadStore, saveStore, hasStoredStore, backupLocalStore, getSyncOwner, setSyncOwner } from './db.js';
-import { mergeAppStates, remoteApi } from './remoteApi.js';
-import { buildSeedData } from './seed.js';
-import { uuid, today } from './utils.js';
+import { emptyState, normalizeState, readCache, writeCache, downloadBackup } from './accountStorage.js';
+import { remoteApi } from './remoteApi.js';
+import { uuid, today, getMondayOf } from './utils.js';
 import { markRevised as applyMarkRevised } from './revisionLogic.js';
-import { addHistoricalLectures } from './historicalLectures.js';
 import {
   getRevisionDue, getTodaySubjects, getActiveContestWeek,
   getContestTopics, computeContestConfidence, getTodayChecklist,
@@ -32,106 +30,7 @@ export const DISTINCT_COLORS = [
   '#ef4444', // Vibrant Red
 ];
 
-// Helper to consolidate lab subjects and assign distinct colors
-function consolidateSubjects(rawState) {
-  if (!rawState || !rawState.subjects) return rawState;
-
-  let subjects = [...rawState.subjects];
-  let topics = [...(rawState.topics || [])];
-  let timetable = { ...(rawState.timetable || {}) };
-
-  // Map to find base subject for any lab subject
-  const labSubjectMap = {}; // labSubjectId -> parentSubjectId
-
-  // First pass: identify lab subjects and pair with non-lab base subjects
-  subjects.forEach(s => {
-    const isLab = /\s+lab$/i.test(s.name) || s.id.endsWith('-lab') || /lab$/i.test(s.name);
-    if (isLab) {
-      const baseName = s.name.replace(/\s+lab$/i, '').replace(/lab$/i, '').trim().toLowerCase();
-      // Find matching base subject
-      const parent = subjects.find(other =>
-        other.id !== s.id &&
-        (other.name.trim().toLowerCase() === baseName ||
-         (baseName === 'physics' && other.name.trim().toLowerCase() === 'phy') ||
-         (baseName === 'phy' && other.name.trim().toLowerCase() === 'physics'))
-      );
-      if (parent) {
-        labSubjectMap[s.id] = parent.id;
-      }
-    }
-  });
-
-  // Remap topics
-  topics = topics.map(t => {
-    if (labSubjectMap[t.subjectId]) {
-      return {
-        ...t,
-        subjectId: labSubjectMap[t.subjectId],
-        sessionType: 'lab',
-      };
-    }
-    return {
-      ...t,
-      sessionType: t.sessionType || 'lecture',
-    };
-  });
-
-  // Remap timetable
-  Object.keys(timetable).forEach(day => {
-    const dayList = timetable[day] || [];
-    const remapped = dayList.map(id => labSubjectMap[id] || id);
-    timetable[day] = [...new Set(remapped)];
-  });
-
-  // Remove lab subjects that were merged
-  subjects = subjects.filter(s => !labSubjectMap[s.id]);
-
-  // Clean names (e.g., if "Phy" -> "Physics") and assign curated distinct colors
-  subjects = subjects.map((s, idx) => ({
-    ...s,
-    color: DISTINCT_COLORS[idx % DISTINCT_COLORS.length],
-  }));
-
-  return {
-    ...rawState,
-    subjects,
-    topics,
-    timetable,
-  };
-}
-
-// ── Reducer ──────────────────────────────────────────────────────────────────
-
-function repairContestSubjectAssignments(state) {
-  const topicsById = new Map((state.topics || []).map(topic => [topic.id, topic]));
-  const contestWeeks = (state.contestWeeks || []).map(contest => {
-    if (!contest.completed || !contest.topicsCovered?.length) return contest;
-    const counts = new Map();
-    contest.topicsCovered.forEach(topicId => {
-      const subjectId = topicsById.get(topicId)?.subjectId;
-      if (subjectId) counts.set(subjectId, (counts.get(subjectId) || 0) + 1);
-    });
-    const [snapshotSubjectId, count = 0] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] || [];
-    const hasClearSubject = snapshotSubjectId && count > contest.topicsCovered.length / 2;
-    return hasClearSubject && snapshotSubjectId !== contest.subjectId
-      ? { ...contest, subjectId: snapshotSubjectId }
-      : contest;
-  });
-  return { ...state, contestWeeks };
-}
-
-function markCurrentUnderstoodLecturesComplete(state) {
-  const migrationKey = '_lecture70To100Through20260919';
-  if (!state || state[migrationKey]) return state;
-
-  const topics = (state.topics || []).map(topic => {
-    const isLecture = (topic.sessionType || 'lecture') === 'lecture';
-    if (!isLecture || Number(topic.understoodPct) !== 70) return topic;
-    return { ...topic, understoodPct: 100, confidence: 5 };
-  });
-
-  return { ...state, topics, [migrationKey]: true };
-}
+// Legacy records are loaded verbatim: account assignment must not rerun old data migrations.
 
 function matchesContest(contest, action) {
   if (action.id) return contest.id === action.id;
@@ -141,6 +40,10 @@ function matchesContest(contest, action) {
 
 function reducer(state, action) {
   switch (action.type) {
+    case 'SAVE_WORKSHEET':
+      return { ...state, worksheets: [...(state.worksheets || []).filter(w => w.id !== action.payload.id), action.payload] };
+    case 'DELETE_WORKSHEET':
+      return { ...state, worksheets: (state.worksheets || []).filter(w => w.id !== action.id) };
     case 'SAVE_RECALL_SESSION': {
       const sessions = state.recallSessions || [];
       return { ...state, recallSessions: [
@@ -373,7 +276,7 @@ function reducer(state, action) {
 
     // ── Full store replace (import) ───────────────────────────────────────────
     case 'REPLACE_STORE': {
-      return repairContestSubjectAssignments({ ...action.payload, _seeded: true });
+      return normalizeState(action.payload);
     }
 
     default:
@@ -386,137 +289,168 @@ function reducer(state, action) {
 const StoreContext = createContext(null);
 
 export function StoreProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, null, () => {
-    const isExistingBrowser = hasStoredStore();
-    const stored = loadStore();
-    let initial = stored;
-    if (!initial._seeded) {
-      const seed = buildSeedData();
-      initial = { ...stored, ...seed, _seeded: true };
-    }
-    // Perform subject consolidation, then import the supplied lecture history once.
-    const consolidated = consolidateSubjects(initial);
-    const withHistory = isExistingBrowser ? addHistoricalLectures(consolidated) : consolidated;
-    return markCurrentUnderstoodLecturesComplete(repairContestSubjectAssignments(withHistory));
-  });
+  const [state, rawDispatch] = useReducer(reducer, null, emptyState);
   const [account, setAccount] = useState({ user: null, status: 'checking', syncStatus: 'local', error: '' });
-  const versionRef = useRef(0);
-  const remoteReadyRef = useRef(false);
+  const sessionRef = useRef(null);
   const stateRef = useRef(state);
-  const saveTimerRef = useRef(null);
+  const pendingRef = useRef(false);
+  const queueRef = useRef(Promise.resolve());
+  const timerRef = useRef(null);
+  const connectingRef = useRef(null);
 
-  useEffect(() => { stateRef.current = state; }, [state]);
+  function dispatch(action) {
+    if (!sessionRef.current) return;
+    const next = reducer(stateRef.current, action);
+    stateRef.current = next;
+    pendingRef.current = true;
+    rawDispatch({ type: 'REPLACE_STORE', payload: next });
+    try { writeCache(sessionRef.current.id, next, sessionRef.current.version, true); }
+    catch { setAccount(a => ({ ...a, error: 'Browser backup is full. Keep this page open until online saving finishes.' })); }
+  }
 
   async function connectAccount(user) {
-    setAccount({ user, status: 'signed-in', syncStatus: 'syncing', error: '' });
+    setAccount({ user: null, status: 'checking', syncStatus: 'syncing', error: '' });
     const remote = await remoteApi.getState();
-    versionRef.current = remote.version;
-    const previousOwner = getSyncOwner();
-    backupLocalStore();
-
-    let nextState;
-    if (!remote.state) {
-      nextState = stateRef.current;
-    } else if (!previousOwner || previousOwner === user.id) {
-      nextState = mergeAppStates(remote.state, stateRef.current);
-    } else {
-      nextState = remote.state;
-    }
-
-    setSyncOwner(user.id);
-    dispatch({ type: 'REPLACE_STORE', payload: nextState });
-    const saved = await remoteApi.saveState(nextState, versionRef.current);
-    versionRef.current = saved.version;
-    remoteReadyRef.current = true;
-    setAccount({ user, status: 'signed-in', syncStatus: 'synced', error: '' });
+    if (remote.accountId !== user.id) throw new Error('Account changed in another tab. Sign in again.');
+    const cache = readCache(user.id);
+    const conflict = cache?.pending && cache.version !== remote.version;
+    const next = normalizeState(cache?.pending ? cache.state : remote.state);
+    sessionRef.current = { id: user.id, version: remote.version, conflict };
+    stateRef.current = next;
+    pendingRef.current = Boolean(cache?.pending);
+    rawDispatch({ type: 'REPLACE_STORE', payload: next });
+    setAccount({ user, status: 'signed-in', syncStatus: conflict ? 'error' : cache?.pending ? 'saving' : 'synced',
+      error: conflict ? 'Another session changed the server copy. Your unsaved browser copy is preserved. Export it in Settings, then reload the server copy.' : '' });
+    try { localStorage.setItem('nst_active_account', user.id); } catch { /* Server ownership checks remain authoritative. */ }
   }
 
   useEffect(() => {
     let active = true;
-    remoteApi.me()
-      .then(async ({ user }) => {
-        if (!active) return;
-        if (user) await connectAccount(user);
-        else setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: '' });
-      })
-      .catch(error => {
-        if (active) setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: error.status === 503 ? '' : error.message });
-      });
+    // Reuse the initial request during StrictMode's effect replay.
+    connectingRef.current ||= remoteApi.me();
+    connectingRef.current.then(async ({ user }) => {
+      if (!active) return;
+      if (user) await connectAccount(user);
+      else setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: '' });
+    }).catch(error => {
+      if (active) setAccount({ user: null, status: 'anonymous', syncStatus: 'error', error: error.message });
+    });
     return () => { active = false; };
   }, []);
 
-  // Persist on every state change
-  useEffect(() => {
-    saveStore(state);
-    if (!account.user || !remoteReadyRef.current) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    setAccount(current => ({ ...current, syncStatus: 'saving', error: '' }));
-    saveTimerRef.current = setTimeout(async () => {
+  function flush() {
+    clearTimeout(timerRef.current);
+    const run = queueRef.current.catch(() => {}).then(async () => {
+      const session = sessionRef.current;
+      if (!session || !pendingRef.current) return;
+      if (session.conflict) throw new Error('Resolve the sync conflict in Settings before saving.');
+      const snapshot = stateRef.current;
       try {
-        const saved = await remoteApi.saveState(stateRef.current, versionRef.current);
-        versionRef.current = saved.version;
-        setAccount(current => ({ ...current, syncStatus: 'synced', error: '' }));
+        const saved = await remoteApi.saveState(snapshot, session.version, session.id);
+        if (sessionRef.current !== session) return;
+        session.version = saved.version;
+        pendingRef.current = stateRef.current !== snapshot;
+        try { writeCache(session.id, stateRef.current, saved.version, pendingRef.current); } catch { /* Remote save succeeded. */ }
+        setAccount(a => ({ ...a, syncStatus: pendingRef.current ? 'saving' : 'synced', error: '' }));
       } catch (error) {
-        setAccount(current => ({ ...current, syncStatus: 'error', error: error.message }));
+        if (error.status === 409 || error.status === 401) session.conflict = true;
+        setAccount(a => ({ ...a, syncStatus: 'error', error: error.message }));
+        throw error;
       }
-    }, 750);
-    return () => clearTimeout(saveTimerRef.current);
-  }, [state]);
-
-  async function register(credentials) {
-    setAccount(current => ({ ...current, status: 'checking', error: '' }));
-    try {
-      const { user } = await remoteApi.register(credentials);
-      await connectAccount(user);
-      return { ok: true };
-    } catch (error) {
-      setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: error.message });
-      return { ok: false, error: error.message };
-    }
+    });
+    queueRef.current = run;
+    return run;
   }
 
+  useEffect(() => {
+    if (!sessionRef.current || !pendingRef.current || sessionRef.current.conflict) return;
+    setAccount(a => ({ ...a, syncStatus: 'saving' }));
+    timerRef.current = setTimeout(() => { flush().catch(() => {}); }, 500);
+    return () => clearTimeout(timerRef.current);
+  }, [state]);
+
+  useEffect(() => {
+    const warn = event => { if (pendingRef.current) { event.preventDefault(); event.returnValue = ''; } };
+    const switched = event => {
+      if (event.key !== 'nst_active_account' || !sessionRef.current || event.newValue === sessionRef.current.id) return;
+      // The per-account pending copy stays on disk. Hide the previous user's UI immediately.
+      clearTimeout(timerRef.current);
+      sessionRef.current = null;
+      pendingRef.current = false;
+      stateRef.current = emptyState();
+      rawDispatch({ type: 'REPLACE_STORE', payload: stateRef.current });
+      setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: 'Account changed in another tab. Please sign in again.' });
+    };
+    window.addEventListener('beforeunload', warn);
+    window.addEventListener('storage', switched);
+    return () => { window.removeEventListener('beforeunload', warn); window.removeEventListener('storage', switched); };
+  }, []);
+
   async function login(credentials) {
-    setAccount(current => ({ ...current, status: 'checking', error: '' }));
+    setAccount(a => ({ ...a, status: 'checking', error: '' }));
     try {
       const { user } = await remoteApi.login(credentials);
       await connectAccount(user);
       return { ok: true };
     } catch (error) {
-      setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: error.message });
+      sessionRef.current = null;
+      setAccount({ user: null, status: 'anonymous', syncStatus: 'error', error: error.message });
       return { ok: false, error: error.message };
     }
   }
 
   async function logout() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    try { await remoteApi.logout(); } catch { /* Local fallback remains available. */ }
-    remoteReadyRef.current = false;
-    versionRef.current = 0;
-    setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: '' });
+    try {
+      await flush();
+      if (pendingRef.current) await flush();
+      await remoteApi.logout();
+      try { localStorage.setItem('nst_active_account', ''); } catch { /* Best-effort notification. */ }
+      sessionRef.current = null;
+      pendingRef.current = false;
+      stateRef.current = emptyState();
+      rawDispatch({ type: 'REPLACE_STORE', payload: stateRef.current });
+      setAccount({ user: null, status: 'anonymous', syncStatus: 'local', error: '' });
+    } catch (error) { setAccount(a => ({ ...a, error: 'Sign out stopped to protect unsaved data. ' + error.message })); }
   }
+
+  async function reloadServer() {
+    if (pendingRef.current) downloadBackup(stateRef.current, 'unsaved-safety-copy');
+    await queueRef.current.catch(() => {});
+    const remote = await remoteApi.getState();
+    if (remote.accountId !== sessionRef.current.id) throw new Error('Account changed in another tab. Reopen the website to sign in again.');
+    sessionRef.current.version = remote.version;
+    sessionRef.current.conflict = false;
+    pendingRef.current = false;
+    stateRef.current = normalizeState(remote.state);
+    writeCache(sessionRef.current.id, stateRef.current, remote.version, false);
+    rawDispatch({ type: 'REPLACE_STORE', payload: stateRef.current });
+    setAccount(a => ({ ...a, syncStatus: 'synced', error: '' }));
+  }
+
+  const isWorksheet = account.user?.role === 'student_worksheet';
 
   // Derived values (memoised)
   const derived = useMemo(() => ({
     revisionDue:          getRevisionDue(state),
     todaySubjects:        getTodaySubjects(state),
-    activeContest:        getActiveContestWeek(state),
+    activeContest:        isWorksheet ? null : getActiveContestWeek(state),
     todayMust:            getTodayChecklist(state, 'must'),
     todayOptional:        getTodayChecklist(state, 'optional'),
     todayActivities:      getTodayActivities(state),
     revisionQueue:        getRevisionQueue(state),
     daysUntilFriday:      daysUntilFriday(),
     weeklyTasks:          getWeeklyTasks(state),
-    getContestTopics:     (cw) => getContestTopics(state, cw),
-    getContestConfidence: (topics) => computeContestConfidence(topics),
+    getContestTopics:     (cw) => isWorksheet ? [] : getContestTopics(state, cw),
+    getContestConfidence: (topics) => isWorksheet ? 0 : computeContestConfidence(topics),
     getSubject:           (id) => getSubject(state, id),
     getChecklistForDate:  (date, type) => getChecklistForDate(state, date, type),
     getActivitiesForDate: (date) => getActivitiesForDate(state, date),
     getRevisionDueForDate:(date) => getRevisionDueForDate(state, date),
     getWeeklyTasks:       (ws) => getWeeklyTasks(state, ws),
-  }), [state]);
+  }), [state, isWorksheet]);
 
   return (
-    <StoreContext.Provider value={{ state, dispatch, derived, account, register, login, logout }}>
+    <StoreContext.Provider value={{ state, dispatch, derived, account, login, logout, isWorksheet, flush, reloadServer }}>
       {children}
     </StoreContext.Provider>
   );

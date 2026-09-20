@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/StoreContext.jsx';
+import { worksheetsDueThisWeek } from '../store/worksheets.js';
 import ChecklistBlock from '../components/ChecklistBlock.jsx';
 import RevisionRow from '../components/RevisionRow.jsx';
 import ConfidenceGauge from '../components/ConfidenceGauge.jsx';
@@ -276,9 +277,21 @@ function ActivitiesList({ activities, dispatch }) {
   );
 }
 
+function WorksheetDueCard({ state, date }) {
+  const worksheets = worksheetsDueThisWeek(state, date);
+  return <div className="card">
+    <div className="card-header"><span className="card-title">🌷 Worksheets due this week</span></div>
+    <p className="text-muted text-sm" style={{ marginBottom: 12 }}>Outstanding worksheets, including overdue work. Soonest first.</p>
+    {worksheets.length ? <div className="flex flex-col gap-3">{worksheets.map(w => <Link to="/worksheets" key={w.id}>
+      <strong>{w.name}</strong><div className="text-sm text-muted">{state.subjects.find(s => s.id === w.subjectId)?.name || 'Archived subject'} · {w.dueDate < date ? 'Overdue · ' : ''}{fmtDate(w.dueDate)} · {w.status}</div>
+    </Link>)}</div> : <p>No outstanding worksheets due this week.</p>}
+    <Link className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} to="/worksheets">Open Worksheet Tracker →</Link>
+  </div>;
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { state, derived, dispatch } = useStore();
+  const { state, derived, dispatch, isWorksheet } = useStore();
 
   const {
     activeContest,
@@ -328,7 +341,7 @@ export default function Dashboard() {
           <div>
             <h1 style={{ marginBottom: 4 }}>Good {greeting()} 👋</h1>
             <p style={{ fontSize: '0.875rem' }}>
-              {contestDuf === 0 ? '🏆 Contest is TODAY' : `Contest in ${contestDuf} day${contestDuf !== 1 ? 's' : ''}`}
+              {isWorksheet ? 'Your classes, priorities and worksheets, together.' : contestDuf === 0 ? '🏆 Contest is TODAY' : `Contest in ${contestDuf} day${contestDuf !== 1 ? 's' : ''}`}
               {contestSubject && <> — <span style={{ color: contestSubject.color, fontWeight: 600 }}>{contestSubject.name}</span></>}
             </p>
           </div>
@@ -425,13 +438,13 @@ export default function Dashboard() {
 
         {/* Right column: Compact Contest + Weekly Tasks stacked */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <CompactContestCard
+          {isWorksheet ? <WorksheetDueCard state={state} date={viewDate} /> : <CompactContestCard
             activeContest={activeContest}
             contestSubject={contestSubject}
             contestConf={contestConf}
             contestTopics={contestTopics}
             duf={contestDuf}
-          />
+          />}
           <WeeklyTasksCard
             tasks={weeklyTasks}
             weekStart={weekStart}

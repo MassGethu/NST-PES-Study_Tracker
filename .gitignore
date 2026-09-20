@@ -9,6 +9,8 @@ dist/
 .env
 .env.local
 .env.*.local
+.local/
+.vercel/
 
 # macOS
 .DS_Store

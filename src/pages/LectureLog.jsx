@@ -269,6 +269,7 @@ export default function LectureLog() {
 /* ─── Inline TopicCard ─────────────────────────────────────────────────── */
 
 function TopicCard({ topic, expanded, editing, onToggle, onEdit, onCancelEdit, onViewDetail, dispatch, subjects }) {
+  const { isWorksheet } = useStore();
   const st = understoodStatus(topic.understoodPct);
   const [editForm, setEditForm] = useState({ ...topic, conceptsStr: (topic.concepts || []).join(', '), bulletsStr: (topic.bullets || []).join('\n') });
 
@@ -313,12 +314,12 @@ function TopicCard({ topic, expanded, editing, onToggle, onEdit, onCancelEdit, o
               style={{ padding: 0, border: 'none', background: 'none', accentColor: 'var(--accent)' }} />
           </div>
           <div className="form-row form-row-2">
-            <div className="form-group">
+            {!isWorksheet && <div className="form-group">
               <label className="form-label">Contest Relevance</label>
               <select value={editForm.contestRelevance} onChange={e => setEditForm(f => ({ ...f, contestRelevance: e.target.value }))}>
                 <option>Low</option><option>Medium</option><option>High</option>
               </select>
-            </div>
+            </div>}
             <div className="form-group">
               <label className="form-label">Difficulty (1–5)</label>
               <input type="number" min="1" max="5" value={editForm.difficulty}
@@ -373,7 +374,7 @@ function TopicCard({ topic, expanded, editing, onToggle, onEdit, onCancelEdit, o
               {topic.sessionType === 'lab' ? '🔬 Lab' : '📚 Lecture'}
             </span>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{topic.understoodPct}% understood</span>
-            {topic.contestRelevance === 'High' && <span className="badge badge-accent" style={{ fontSize: '0.6rem' }}>Contest High</span>}
+            {!isWorksheet && topic.contestRelevance === 'High' && <span className="badge badge-accent" style={{ fontSize: '0.6rem' }}>Contest High</span>}
           </div>
         </div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', flexShrink: 0 }}>
@@ -414,7 +415,7 @@ function TopicCard({ topic, expanded, editing, onToggle, onEdit, onCancelEdit, o
           {/* Meta */}
           <div className="flex gap-4" style={{ flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
             <span>Difficulty: {'★'.repeat(topic.difficulty || 1)}{'☆'.repeat(5 - (topic.difficulty || 1))}</span>
-            <span>Relevance: {topic.contestRelevance}</span>
+            {!isWorksheet && <span>Relevance: {topic.contestRelevance}</span>}
             <span>Revision round: {topic.revisionCompleted ? 'Completed' : `${(topic.revisionCount ?? topic.revisionStage ?? 0) + 1}/2`}</span>
             {topic.notes && <a href={topic.notes} target="_blank" rel="noreferrer" style={{ color: 'var(--text-accent)' }}>Notes ↗</a>}
           </div>

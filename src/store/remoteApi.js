@@ -4,7 +4,10 @@ async function request(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
   });
-  const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+  if (response.status !== 204 && !response.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('The server did not return an API response. Check the deployment’s API routing.');
+  }
+  const data = response.status === 204 ? null : await response.json();
   if (!response.ok) {
     const error = new Error(data?.error || `Request failed (${response.status})`);
     error.status = response.status;
@@ -16,13 +19,13 @@ async function request(path, options = {}) {
 
 export const remoteApi = {
   me: () => request('/api/auth/me'),
-  register: payload => request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  changePassword: payload => request('/api/auth/password', { method: 'POST', body: JSON.stringify(payload) }),
   login: payload => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request('/api/auth/logout', { method: 'POST' }),
   getState: () => request('/api/state'),
-  saveState: (state, baseVersion) => request('/api/state', {
+  saveState: (state, baseVersion, accountId) => request('/api/state', {
     method: 'PUT',
-    body: JSON.stringify({ state, baseVersion }),
+    body: JSON.stringify({ state, baseVersion, accountId }),
   }),
 };
 

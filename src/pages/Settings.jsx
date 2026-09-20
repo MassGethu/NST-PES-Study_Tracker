@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { useStore, DISTINCT_COLORS } from '../store/StoreContext.jsx';
 import { uuid } from '../store/utils.js';
-import { exportStore, importStore } from '../store/db.js';
+import { downloadBackup, parseBackup, mergeImport, readLegacy, emptyState } from '../store/accountStorage.js';
+import { remoteApi } from '../store/remoteApi.js';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_LABELS = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
@@ -9,7 +10,7 @@ const DAY_LABELS = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thur
 const PRESET_COLORS = DISTINCT_COLORS;
 
 export default function Settings() {
-  const { state, dispatch, account, register, login, logout } = useStore();
+  const { state, dispatch, account, logout, isWorksheet, flush, reloadServer } = useStore();
   const subjects = state.subjects || [];
   const timetable = state.timetable || {};
   const fileRef = useRef(null);
@@ -51,15 +52,17 @@ export default function Settings() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = importStore(ev.target.result);
-      if (result.ok) {
+    reader.onload = async (ev) => {
+      try {
+        const incoming = parseBackup(ev.target.result);
+        const next = mergeImport(state, incoming);
+        if (!confirm('Add this backup to the signed-in account? Existing conflicting records will never be overwritten.')) return;
+        downloadBackup(state, `${account.user.username}-before-import`);
+        dispatch({ type: 'REPLACE_STORE', payload: next });
+        await flush();
         setImportSuccess(true);
         setImportError('');
-        setTimeout(() => window.location.reload(), 800);
-      } else {
-        setImportError(result.error);
-      }
+      } catch (error) { setImportError(error.message); }
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -85,7 +88,7 @@ export default function Settings() {
       </div>
 
       {activeSection === 'account' && (
-        <AccountPanel account={account} register={register} login={login} logout={logout} />
+        <AccountPanel account={account} logout={logout} flush={flush} reloadServer={reloadServer} />
       )}
 
       {/* ── Subjects ─────────────────────────────────────────────────── */}
@@ -236,7 +239,7 @@ export default function Settings() {
             <p style={{ marginBottom: 'var(--space-4)', fontSize: '0.875rem' }}>
               Download a full JSON backup of all your data. Import it on another device or restore it here.
             </p>
-            <button className="btn btn-secondary" onClick={exportStore}>
+            <button className="btn btn-secondary" onClick={() => downloadBackup(state, account.user.username)}>
               ⬇️ Export JSON Backup
             </button>
           </div>
@@ -244,7 +247,7 @@ export default function Settings() {
           <div className="card">
             <h3 style={{ marginBottom: 'var(--space-2)' }}>Import Data</h3>
             <p style={{ marginBottom: 'var(--space-4)', fontSize: '0.875rem' }}>
-              Restore from a previous JSON backup. <strong style={{ color: 'var(--yellow)' }}>This will overwrite all current data.</strong>
+              Add a previous JSON backup to this account. Conflicting records stop the import; nothing is silently overwritten. A safety copy downloads first.
             </p>
             <input
               type="file"
@@ -258,7 +261,17 @@ export default function Settings() {
               ⬆️ Import JSON Backup
             </button>
             {importError && <p style={{ color: 'var(--red)', marginTop: 'var(--space-3)', fontSize: '0.85rem' }}>{importError}</p>}
-            {importSuccess && <p style={{ color: 'var(--green)', marginTop: 'var(--space-3)', fontSize: '0.85rem' }}>✓ Imported! Reloading…</p>}
+            {importSuccess && <p role="status" style={{ color: 'var(--green)', marginTop: 'var(--space-3)', fontSize: '0.85rem' }}>✓ Imported and saved online.</p>}
+            {account.user.username === 'aadarsh' && <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={async () => {
+              try {
+                const legacy = readLegacy();
+                if (!legacy) throw new Error('No legacy data at this website address. Export it at localhost:5173 first, then import the downloaded backup here.');
+                const next = mergeImport(state, legacy);
+                if (!confirm('Import your old data from this browser into Aadarsh’s account? The original remains untouched.')) return;
+                downloadBackup(legacy, 'local-original');
+                dispatch({ type: 'REPLACE_STORE', payload: next }); await flush(); setImportSuccess(true); setImportError('');
+              } catch (error) { setImportError(error.message); }
+            }}>Import old data from this browser</button>}
           </div>
 
           <div className="card">
@@ -267,7 +280,7 @@ export default function Settings() {
               {[
                 ['Subjects', (state.subjects || []).length],
                 ['Topics logged', (state.topics || []).length],
-                ['Contest weeks', (state.contestWeeks || []).length],
+                isWorksheet ? ['Worksheets', (state.worksheets || []).length] : ['Contest weeks', (state.contestWeeks || []).length],
                 ['Checklist items', (state.weeklyChecklist || []).length],
               ].map(([label, count]) => (
                 <div key={label} className="flex justify-between" style={{ padding: 'var(--space-2) 0', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -285,8 +298,8 @@ export default function Settings() {
             </p>
             <button className="btn btn-danger" onClick={() => {
               if (confirm('Delete ALL data and reset to defaults? This cannot be undone.')) {
-                localStorage.removeItem('nst_tracker_v1');
-                window.location.reload();
+                downloadBackup(state, 'before-reset');
+                dispatch({ type: 'REPLACE_STORE', payload: emptyState() });
               }
             }}>
               🗑 Reset Everything
@@ -298,73 +311,39 @@ export default function Settings() {
   );
 }
 
-function AccountPanel({ account, register, login, logout }) {
-  const [mode, setMode] = useState('register');
-  const [form, setForm] = useState({ displayName: '', email: '', password: '' });
-  const [submitting, setSubmitting] = useState(false);
+function AccountPanel({ account, logout, flush, reloadServer }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-
-  async function submit(event) {
-    event.preventDefault();
-    setSubmitting(true);
-    setMessage('');
-    const result = mode === 'register'
-      ? await register(form)
-      : await login({ email: form.email, password: form.password });
-    setSubmitting(false);
-    if (result.ok) setMessage(mode === 'register' ? 'Account created. Your existing tracker data is now backed up online.' : 'Signed in and synced.');
-  }
-
-  if (account.user) {
-    const statusLabel = {
-      syncing: 'Importing your existing data…',
-      saving: 'Saving changes…',
-      synced: 'All changes saved',
-      error: 'Sync needs attention',
-    }[account.syncStatus] || 'Connected';
-    return (
-      <div className="card" style={{ maxWidth: 680 }}>
-        <div className="flex justify-between items-center gap-3" style={{ flexWrap: 'wrap' }}>
-          <div>
-            <h3>{account.user.display_name || account.user.email}</h3>
-            <p className="text-muted text-sm" style={{ marginTop: 4 }}>{account.user.email}</p>
-          </div>
-          <span className={`sync-badge ${account.syncStatus}`}>{statusLabel}</span>
-        </div>
-        <p style={{ margin: 'var(--space-4) 0', fontSize: '0.875rem' }}>
-          Your tracker is stored securely for this account. The browser copy remains available as a safety backup.
-        </p>
-        {account.error && <p className="form-error" style={{ marginBottom: 'var(--space-3)' }}>{account.error}</p>}
-        {message && <p style={{ color: 'var(--green)', marginBottom: 'var(--space-3)', fontSize: '0.875rem' }}>{message}</p>}
-        <button className="btn btn-secondary" onClick={logout}>Sign out</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card" style={{ maxWidth: 680 }}>
-      <h3 style={{ marginBottom: 'var(--space-2)' }}>{mode === 'register' ? 'Create your tracker account' : 'Sign in to your tracker'}</h3>
-      <p style={{ marginBottom: 'var(--space-4)', fontSize: '0.875rem' }}>
-        {mode === 'register'
-          ? 'Your current browser data will be imported automatically and kept intact.'
-          : 'Your saved tracker data will sync to this device.'}
-      </p>
-      <form onSubmit={submit} className="flex flex-col gap-3">
-        {mode === 'register' && <div className="form-group"><label className="form-label" htmlFor="account-name">Name</label><input id="account-name" value={form.displayName} onChange={event => setForm(current => ({ ...current, displayName: event.target.value }))} autoComplete="name" /></div>}
-        <div className="form-group"><label className="form-label" htmlFor="account-email">Email</label><input id="account-email" type="email" required value={form.email} onChange={event => setForm(current => ({ ...current, email: event.target.value }))} autoComplete="email" /></div>
-        <div className="form-group"><label className="form-label" htmlFor="account-password">Password</label><input id="account-password" type="password" required minLength={8} value={form.password} onChange={event => setForm(current => ({ ...current, password: event.target.value }))} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} /></div>
-        {account.error && <p className="form-error">{account.error}</p>}
-        {message && <p style={{ color: 'var(--green)', fontSize: '0.875rem' }}>{message}</p>}
-        <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-          <button type="submit" className="btn btn-primary" disabled={submitting || account.status === 'checking'}>{submitting ? 'Please wait…' : mode === 'register' ? 'Create account & import data' : 'Sign in'}</button>
-          <button type="button" className="btn btn-ghost" onClick={() => { setMode(current => current === 'register' ? 'login' : 'register'); setMessage(''); }}>
-            {mode === 'register' ? 'I already have an account' : 'Create a new account'}
-          </button>
-        </div>
-      </form>
-      <p className="text-muted text-sm" style={{ marginTop: 'var(--space-4)' }}>You can continue using the app locally without an account while developing.</p>
+  const [busy, setBusy] = useState(false);
+  return <div className="card" style={{ maxWidth: 680 }}>
+    <h3>{account.user.display_name}</h3>
+    <p className="text-muted text-sm">@{account.user.username || account.user.email}</p>
+    <p style={{ margin: '16px 0' }} role="status">{account.syncStatus === 'synced' ? 'All changes saved online' : account.syncStatus === 'error' ? 'Sync needs attention' : 'Saving changes…'}</p>
+    {account.error && <p className="form-error" role="alert">{account.error}</p>}
+    <div className="flex gap-3" style={{ flexWrap: 'wrap', marginBottom: 24 }}>
+      <button className="btn btn-secondary" disabled={busy} onClick={async () => { setBusy(true); await logout(); setBusy(false); }}>Sign out</button>
+      {account.syncStatus === 'error' && <>
+        <button className="btn btn-secondary" onClick={() => flush().catch(e => setMessage(e.message))}>Retry save</button>
+        <button className="btn btn-secondary" onClick={async () => {
+          if (!confirm('Download your unsaved safety copy and load the latest server copy?')) return;
+          try { await reloadServer(); } catch (e) { setMessage(e.message); }
+        }}>Reload server copy</button>
+      </>}
     </div>
-  );
+    <h3 style={{ marginBottom: 12 }}>Change password</h3>
+    <form className="flex flex-col gap-3" onSubmit={async e => {
+      e.preventDefault(); setBusy(true); setMessage('');
+      try { await remoteApi.changePassword({ currentPassword, password }); setCurrentPassword(''); setPassword(''); setMessage('Password updated. Other sessions have been signed out.'); }
+      catch (error) { setMessage(error.message); }
+      finally { setBusy(false); }
+    }}>
+      <label className="form-group">Current password<input type="password" autoComplete="current-password" required maxLength={128} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+      <label className="form-group">New password<input type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={password} onChange={e => setPassword(e.target.value)} /></label>
+      <button className="btn btn-primary" disabled={busy}>Update password</button>
+      {message && <p role="status">{message}</p>}
+    </form>
+  </div>;
 }
 
 /* ── Colour picker sub-component ──────────────────────────────────────────── */

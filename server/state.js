@@ -11,7 +11,7 @@ router.get('/', requireUser, async (req, res, next) => {
       [req.user.id],
     );
     const row = result.rows[0] || { state: null, version: 0, updated_at: null };
-    res.json({ state: row.state, version: row.version, updatedAt: row.updated_at });
+    res.json({ accountId: req.user.id, state: row.state, version: row.version, updatedAt: row.updated_at });
   } catch (error) {
     next(error);
   }
@@ -19,6 +19,8 @@ router.get('/', requireUser, async (req, res, next) => {
 
 router.put('/', requireUser, async (req, res, next) => {
   try {
+    // A tab opened as one user must never write into a different user's session.
+    if (req.body.accountId !== req.user.id) return res.status(409).json({ error: 'Account changed. Reload before making changes.' });
     const state = req.body.state;
     const baseVersion = Number(req.body.baseVersion);
     if (!state || typeof state !== 'object' || Array.isArray(state)) {

@@ -4,7 +4,7 @@ import { useStore } from '../store/StoreContext.jsx';
 import { confidenceLabel, fmtDate, understoodStatus } from '../store/utils.js';
 
 export default function LectureDetailModal({ topicId, onClose }) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, isWorksheet } = useStore();
   const topic = (state.topics || []).find(t => t.id === topicId);
   const subject = (state.subjects || []).find(s => s.id === topic?.subjectId);
   const [aiLoading, setAiLoading] = useState(false);
@@ -60,7 +60,7 @@ export default function LectureDetailModal({ topicId, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--bg-surface)', borderRadius: 'var(--radius)' }}>
             <Stat label="Understanding" value={`${status.label} ${topic.understoodPct}%`} />
             <Stat label="Difficulty" value={`${'★'.repeat(topic.difficulty || 1)}${'☆'.repeat(5 - (topic.difficulty || 1))}`} />
-            <Stat label="Contest relevance" value={topic.contestRelevance || 'Medium'} />
+            {!isWorksheet && <Stat label="Contest relevance" value={topic.contestRelevance || 'Medium'} />}
             <Stat label="Confidence" value={`${topic.confidence || 3}/5 · ${confidenceLabel(topic.confidence || 3)}`} />
           </div>
 
