@@ -7,15 +7,19 @@ same structure plus a `worksheets` collection; there is no second lecture model.
 
 ## Configure the existing Vercel project
 
-1. Connect PostgreSQL and set server-side `DATABASE_URL` in the project's
-   environment variables. Do not use a `VITE_` prefix for secrets.
+1. In Supabase, open the project and choose **Connect → Transaction pooler**.
+   Copy that URI (pooler host, port `6543`, user `postgres.PROJECT_REF`) and
+   replace `[YOUR-PASSWORD]` with the database password. Percent-encode reserved
+   password characters. Add the full URI to Vercel as server-side `DATABASE_URL`.
+   Do not use the IPv6-only direct URI or a `VITE_` prefix.
 2. Set `AADARSH_INITIAL_PASSWORD` and `RITHIKA_INITIAL_PASSWORD` to different
    passwords, each 8–128 characters. These provision usernames `aadarsh` and
    `rithika`, with `student_nst` and `student_worksheet` roles respectively.
 3. Retain/set `GEMINI_API_KEY` for the existing AI features.
 4. Deploy this repository: build `npm run build`, output `dist`. The included
    `vercel.json` routes APIs before the SPA fallback and includes the SQL schema.
-5. Check `/api/health` returns JSON, then log in as both users. After initial
+5. Redeploy after saving variables; Vercel does not apply new variables to old
+   deployments. Check `/api/health` returns JSON, then log in as both users. After initial
    provisioning, remove the two initial-password variables and redeploy. They
    never reset existing users' passwords on subsequent starts.
 

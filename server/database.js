@@ -17,10 +17,15 @@ function getPool() {
   if (!pool) {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' && process.env.DATABASE_SSL !== 'false'
+      // One application-side connection per warm serverless instance. Supabase's
+      // transaction pooler handles concurrency across instances.
+      max: Number(process.env.DATABASE_POOL_SIZE || (process.env.VERCEL ? 1 : 10)),
+      connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || 10000),
+      idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS || 10000),
+      allowExitOnIdle: true,
+      ssl: (process.env.NODE_ENV === 'production' || process.env.VERCEL) && process.env.DATABASE_SSL !== 'false'
         ? { rejectUnauthorized: false }
         : undefined,
-      max: Number(process.env.DATABASE_POOL_SIZE || 10),
     });
   }
   return pool;
