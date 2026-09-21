@@ -4,10 +4,15 @@ const { hashPassword } = require('./passwords');
 // Admin-only bootstrap. Never expose account claiming or role selection to a browser.
 // Existing IDs, email addresses and state documents are preserved.
 async function provisionAccounts(pool) {
-  const passwords = [process.env.AADARSH_INITIAL_PASSWORD, process.env.RITHIKA_INITIAL_PASSWORD];
+  const passwordKeys = ['AADARSH_INITIAL_PASSWORD', 'RITHIKA_INITIAL_PASSWORD'];
+  const passwords = passwordKeys.map(key => process.env[key]);
   if (!passwords.some(Boolean)) return;
   if (passwords.some(p => !p || p.length < 8 || p.length > 128)) {
-    throw new Error('Set both initial account passwords (8–128 characters).');
+    const invalid = passwords.flatMap((password, index) =>
+      !password || password.length < 8 || password.length > 128
+        ? [`${passwordKeys[index]}: ${password === undefined ? 'missing' : `${password.length} characters`}`]
+        : []);
+    throw new Error(`Initial account password configuration invalid (${invalid.join('; ')}). Expected 8–128 characters each.`);
   }
   const client = await pool.connect();
   try {
