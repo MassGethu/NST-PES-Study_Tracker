@@ -3,42 +3,41 @@ import { useStore } from '../store/StoreContext.jsx';
 import { uuid } from '../store/utils.js';
 import {
   HACKATHON_STATUSES, isHackathonUser, officialUrl, validateHackathon,
-  sortedHackathons, localDeadline, formatDeadline,
+  sortedHackathons, localDeadline, formatDeadline, hackathonDeadline,
 } from '../store/hackathons.js';
 
-export default function HackathonsCard() {
+export default function Hackathons() {
   const { state, account, dispatch } = useStore();
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
   const [archived, setArchived] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   if (!isHackathonUser(account.user)) return null;
 
   const all = state.hackathons || [];
   const rows = sortedHackathons(all, archived);
   const active = sortedHackathons(all).filter(row => row.status !== 'Submitted');
-  const next = active.find(row => Date.parse(row.deadline) >= Date.now());
+  const next = active.find(row => Date.parse(hackathonDeadline(row).value) >= Date.now());
   const change = (key, value) => setEditing(row => ({ ...row, [key]: value }));
   const save = row => dispatch({ type: 'SAVE_HACKATHON', payload: row });
-  const edit = row => { setError(''); setEditing({ ...row, deadline: localDeadline(row.deadline) }); };
+  const edit = row => { setError(''); setEditing({ ...row, deadline: localDeadline(row.deadline), registrationDeadline: localDeadline(row.registrationDeadline) }); };
 
-  return <section className="card full-width" aria-labelledby="hackathons-title">
+  return <section className="card" aria-labelledby="hackathons-title">
     <div className="card-header" style={{ flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-      <h2 className="card-title" id="hackathons-title">🏁 Hackathons Currently Registered</h2>
+      <h2 className="card-title" id="hackathons-title">🏁 Hackathon Manager</h2>
       <button className="btn btn-primary btn-sm" onClick={() => {
-        setError(''); setEditing({ id: uuid(), name: '', url: '', deadline: '', idea: '', status: 'Registered', notes: '', archived: false });
+        setError(''); setEditing({ id: uuid(), name: '', url: '', deadline: '', registrationDeadline: '', idea: '', status: 'Registered', notes: '', archived: false });
       }}>+ Add Hackathon</button>
     </div>
     <p className="text-muted text-sm mb-3">
       {active.length} active hackathon{active.length !== 1 ? 's' : ''}
-      {next && ` · Next deadline: ${formatDeadline(next.deadline)}`}
+      {next && ` · Next ${hackathonDeadline(next).label.toLowerCase()} deadline: ${formatDeadline(hackathonDeadline(next).value)}`}
     </p>
 
     {editing && <form className="log-section flex flex-col gap-3 mb-4" onSubmit={event => {
       event.preventDefault();
       const message = validateHackathon(editing); setError(message); if (message) return;
       save({ ...editing, name: editing.name.trim(), url: officialUrl(editing.url),
-        deadline: new Date(editing.deadline).toISOString(), idea: editing.idea.trim(), notes: editing.notes.trim() });
+        deadline: new Date(editing.deadline).toISOString(), registrationDeadline: editing.registrationDeadline ? new Date(editing.registrationDeadline).toISOString() : '', idea: editing.idea.trim(), notes: editing.notes.trim() });
       setEditing(null);
     }}>
       <h3>{all.some(row => row.id === editing.id) ? 'View / edit hackathon' : 'New hackathon'}</h3>
@@ -46,6 +45,7 @@ export default function HackathonsCard() {
         <label className="form-group">Hackathon name<input autoFocus required maxLength={200} value={editing.name} onChange={e => change('name', e.target.value)} /></label>
         <label className="form-group">Official / registration URL<input type="url" required maxLength={2000} placeholder="https://…" value={editing.url} onChange={e => change('url', e.target.value)} /></label>
         <label className="form-group">Final submission deadline (your local time)<input type="datetime-local" required value={editing.deadline} onChange={e => change('deadline', e.target.value)} /></label>
+        <label className="form-group">Registration deadline (your local time)<input type="datetime-local" required={editing.status === 'Registration Pending'} value={editing.registrationDeadline || ''} onChange={e => change('registrationDeadline', e.target.value)} /></label>
         <label className="form-group">Progress<select value={editing.status} onChange={e => change('status', e.target.value)}>{HACKATHON_STATUSES.map(status => <option key={status}>{status}</option>)}</select></label>
       </div>
       <label className="form-group">My current idea<textarea rows={3} maxLength={10000} placeholder="Add an idea now or as it develops…" value={editing.idea} onChange={e => change('idea', e.target.value)} /></label>
@@ -55,17 +55,19 @@ export default function HackathonsCard() {
     </form>}
 
     <div className="tabs" style={{ marginBottom: 'var(--space-3)' }}>
-      <button className={`tab${!archived ? ' active' : ''}`} onClick={() => { setArchived(false); setExpanded(false); }}>Current ({all.filter(row => !row.archived).length})</button>
-      <button className={`tab${archived ? ' active' : ''}`} onClick={() => { setArchived(true); setExpanded(false); }}>Archived ({all.filter(row => row.archived).length})</button>
+      <button className={`tab${!archived ? ' active' : ''}`} onClick={() => { setArchived(false); }}>Current ({all.filter(row => !row.archived).length})</button>
+      <button className={`tab${archived ? ' active' : ''}`} onClick={() => { setArchived(true); }}>Archived ({all.filter(row => row.archived).length})</button>
     </div>
     <div className="flex flex-col gap-3">
-      {(expanded ? rows : rows.slice(0, 3)).map(row => {
-        const passed = Date.parse(row.deadline) < Date.now();
+      {rows.map(row => {
+        const deadline = hackathonDeadline(row);
+        const passed = Date.parse(deadline.value) < Date.now();
         return <article key={row.id} className="hackathon-row">
           <div className="hackathon-info">
             <h3 className="text-sm" style={{ overflowWrap: 'anywhere' }}>{row.name}</h3>
             <div className="flex items-center gap-2" style={{ flexWrap: 'wrap', marginTop: 4 }}>
-              <span className="text-muted text-xs">Due {formatDeadline(row.deadline)}</span>
+              <span className="text-muted text-xs">{deadline.label} due {formatDeadline(deadline.value)}</span>
+              {row.status === 'Registration Pending' && <span className="text-muted text-xs">Submission due {formatDeadline(row.deadline)}</span>}
               {passed && <span className={`badge ${row.status === 'Submitted' ? 'badge-muted' : 'badge-red'}`}>Deadline passed</span>}
               {row.status === 'Submitted' && <span className="badge badge-green">Submitted</span>}
             </div>
@@ -73,6 +75,12 @@ export default function HackathonsCard() {
           </div>
           <div className="hackathon-actions">
             <select aria-label={`Progress for ${row.name}`} value={row.status} onChange={e => {
+              if (e.target.value === 'Registration Pending' && !row.registrationDeadline) {
+                edit(row);
+                setEditing(current => ({ ...current, status: 'Registration Pending' }));
+                setError('Add the registration deadline before saving this status.');
+                return;
+              }
               save({ ...row, status: e.target.value });
               if (editing?.id === row.id) change('status', e.target.value);
             }}>{HACKATHON_STATUSES.map(status => <option key={status}>{status}</option>)}</select>
@@ -94,6 +102,5 @@ export default function HackathonsCard() {
       })}
       {!rows.length && <p className="text-muted text-sm">{archived ? 'No archived hackathons.' : 'No hackathons yet. Add one when you register.'}</p>}
     </div>
-    {rows.length > 3 && <button className="btn btn-ghost btn-sm mt-3" onClick={() => setExpanded(value => !value)}>{expanded ? 'Show fewer' : `Show all ${rows.length} hackathons`}</button>}
   </section>;
 }

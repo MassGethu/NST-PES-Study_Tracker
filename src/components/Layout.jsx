@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { today, fmtDate } from '../store/utils.js';
+import { isHackathonUser } from '../store/hackathons.js';
 import CarryForwardPrompt from './CarryForwardPrompt.jsx';
 import { useStore } from '../store/StoreContext.jsx';
 
@@ -16,9 +17,11 @@ const NAV_ITEMS = [
 
 export default function Layout({ children }) {
   const todayStr = fmtDate(today());
-  const { isWorksheet } = useStore();
+  const { isWorksheet, account } = useStore();
   const navItems = NAV_ITEMS.map(item => isWorksheet && item.to === '/contest'
     ? { to: '/worksheets', icon: '🌷', label: 'Worksheets' } : item);
+
+  if (isHackathonUser(account.user)) navItems.splice(4, 0, { to: '/hackathons', icon: '🏁', label: 'Hackathon Manager' });
 
   return (
     <div className="app-shell">
@@ -91,6 +94,7 @@ function PageTitle() {
     '/calendar': '📅 Calendar',
     '/log':      '📝 Lecture Log',
     '/contest':  '🏆 Contest Tracker',
+    '/hackathons': '🏁 Hackathon Manager',
     '/worksheets': '🌷 Worksheet Tracker',
     '/revision': '🔄 Revision Queue',
     '/recall': '🧠 Active Recall',

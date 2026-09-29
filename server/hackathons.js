@@ -1,4 +1,4 @@
-const STATUSES = ['Registered', 'Brainstorming', 'Idea Finalized', 'Planning', 'Building', 'Testing', 'PPT / Submission Preparation', 'Submitted'];
+const STATUSES = ['Registration Pending', 'Registered', 'Brainstorming', 'Idea Finalized', 'Planning', 'Building', 'Testing', 'PPT / Submission Preparation', 'Submitted'];
 
 function validateHackathons(rows, user) {
   if (rows === undefined) return '';
@@ -13,6 +13,8 @@ function validateHackathons(rows, user) {
       if (typeof row.url !== 'string' || row.url.length > 2000 || !['https:', 'http:'].includes(new URL(row.url).protocol)) return 'Enter a valid official URL.';
     } catch { return 'Enter a valid official URL.'; }
     if (typeof row.deadline !== 'string' || !Number.isFinite(Date.parse(row.deadline))) return 'Enter a valid submission deadline.';
+    if (row.status === 'Registration Pending' && !row.registrationDeadline) return 'Enter a registration deadline.';
+    if (row.registrationDeadline !== undefined && row.registrationDeadline !== '' && (typeof row.registrationDeadline !== 'string' || !Number.isFinite(Date.parse(row.registrationDeadline)))) return 'Enter a valid registration deadline.';
     if (!STATUSES.includes(row.status)) return 'Choose a valid hackathon progress status.';
     for (const key of ['idea', 'notes']) {
       if (typeof row[key] !== 'string' || row[key].length > 10000) return `Enter valid hackathon ${key}.`;
