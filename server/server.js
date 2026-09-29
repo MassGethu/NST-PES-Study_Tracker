@@ -41,6 +41,7 @@ app.use(express.json({ limit: '50mb' }));   // large enough for base64 images
 
 app.use('/api/auth', authRouter);
 app.use('/api/state', optionalUser, stateRouter);
+app.use('/api/hackathons', optionalUser, require('./hackathonAI').createHackathonAIRouter());
 
 function requireAccountWhenHosted(req, res, next) {
   return optionalUser(req, res, error => {

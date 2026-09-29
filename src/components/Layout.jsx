@@ -100,5 +100,5 @@ function PageTitle() {
     '/recall': '🧠 Active Recall',
     '/settings': '⚙️ Settings',
   };
-  return <span className="page-title">{map[location.pathname] || 'NST Tracker'}</span>;
+  return <span className="page-title">{map[location.pathname] || (location.pathname.startsWith('/hackathons/') ? '🏁 Hackathon Manager' : 'NST Tracker')}</span>;
 }

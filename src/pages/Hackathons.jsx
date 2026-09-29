@@ -1,106 +1,67 @@
 import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/StoreContext.jsx';
 import { uuid } from '../store/utils.js';
-import {
-  HACKATHON_STATUSES, isHackathonUser, officialUrl, validateHackathon,
-  sortedHackathons, localDeadline, formatDeadline, hackathonDeadline,
-} from '../store/hackathons.js';
+import { newHackathon, validateHackathon, sortedHackathons, formatDeadline, hackathonDeadline, officialUrl } from '../store/hackathons.js';
 
 export default function Hackathons() {
-  const { state, account, dispatch } = useStore();
-  const [editing, setEditing] = useState(null);
+  const { state, dispatch, researchHackathon, researchingHackathons, account } = useStore();
+  const navigate = useNavigate();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
   const [error, setError] = useState('');
-  const [archived, setArchived] = useState(false);
-  if (!isHackathonUser(account.user)) return null;
-
+  const [filter, setFilter] = useState('current');
+  const [search, setSearch] = useState('');
   const all = state.hackathons || [];
-  const rows = sortedHackathons(all, archived);
-  const active = sortedHackathons(all).filter(row => row.status !== 'Submitted');
-  const next = active.find(row => Date.parse(hackathonDeadline(row).value) >= Date.now());
-  const change = (key, value) => setEditing(row => ({ ...row, [key]: value }));
-  const save = row => dispatch({ type: 'SAVE_HACKATHON', payload: row });
-  const edit = row => { setError(''); setEditing({ ...row, deadline: localDeadline(row.deadline), registrationDeadline: localDeadline(row.registrationDeadline) }); };
+  const rows = sortedHackathons(all, filter === 'archived').filter(row =>
+    (filter !== 'submitted' || row.status === 'Submitted') &&
+    (filter !== 'current' || row.status !== 'Submitted') &&
+    `${row.name} ${row.domains || ''}`.toLowerCase().includes(search.toLowerCase()));
 
-  return <section className="card" aria-labelledby="hackathons-title">
-    <div className="card-header" style={{ flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-      <h2 className="card-title" id="hackathons-title">🏁 Hackathon Manager</h2>
-      <button className="btn btn-primary btn-sm" onClick={() => {
-        setError(''); setEditing({ id: uuid(), name: '', url: '', deadline: '', registrationDeadline: '', idea: '', status: 'Registered', notes: '', archived: false });
-      }}>+ Add Hackathon</button>
+  return <div className="hackathon-manager">
+    <div className="section-header hackathon-heading">
+      <div><h1>Hackathon Manager</h1><p className="text-muted">Capture an opportunity now. Decide what to build when you have time.</p></div>
+      <div className="flex gap-2"><Link className="btn btn-secondary" to="/hackathons/ideas">💡 Idea bank</Link><button className="btn btn-primary" onClick={() => { setAdding(true); setError(''); }}>+ Add Hackathon</button></div>
     </div>
-    <p className="text-muted text-sm mb-3">
-      {active.length} active hackathon{active.length !== 1 ? 's' : ''}
-      {next && ` · Next ${hackathonDeadline(next).label.toLowerCase()} deadline: ${formatDeadline(hackathonDeadline(next).value)}`}
-    </p>
-
-    {editing && <form className="log-section flex flex-col gap-3 mb-4" onSubmit={event => {
+    {adding && <form className="card mb-4" onSubmit={event => {
       event.preventDefault();
-      const message = validateHackathon(editing); setError(message); if (message) return;
-      save({ ...editing, name: editing.name.trim(), url: officialUrl(editing.url),
-        deadline: new Date(editing.deadline).toISOString(), registrationDeadline: editing.registrationDeadline ? new Date(editing.registrationDeadline).toISOString() : '', idea: editing.idea.trim(), notes: editing.notes.trim() });
-      setEditing(null);
+      const row = newHackathon(uuid(), name, url);
+      const message = validateHackathon(row); setError(message); if (message) return;
+      dispatch({ type: 'SAVE_HACKATHON', payload: row });
+      researchHackathon(row.id);
+      navigate(`/hackathons/${row.id}`);
     }}>
-      <h3>{all.some(row => row.id === editing.id) ? 'View / edit hackathon' : 'New hackathon'}</h3>
+      <h2 className="mb-3">Save an opportunity</h2>
       <div className="form-row form-row-2">
-        <label className="form-group">Hackathon name<input autoFocus required maxLength={200} value={editing.name} onChange={e => change('name', e.target.value)} /></label>
-        <label className="form-group">Official / registration URL<input type="url" required maxLength={2000} placeholder="https://…" value={editing.url} onChange={e => change('url', e.target.value)} /></label>
-        <label className="form-group">Final submission deadline (your local time)<input type="datetime-local" required value={editing.deadline} onChange={e => change('deadline', e.target.value)} /></label>
-        <label className="form-group">Registration deadline (your local time)<input type="datetime-local" required={editing.status === 'Registration Pending'} value={editing.registrationDeadline || ''} onChange={e => change('registrationDeadline', e.target.value)} /></label>
-        <label className="form-group">Progress<select value={editing.status} onChange={e => change('status', e.target.value)}>{HACKATHON_STATUSES.map(status => <option key={status}>{status}</option>)}</select></label>
+        <label className="form-group">Hackathon name<input autoFocus required maxLength={200} value={name} onChange={e => setName(e.target.value)} /></label>
+        <label className="form-group">Official URL<input type="url" required maxLength={2000} placeholder="https://…" value={url} onChange={e => setUrl(e.target.value)} /></label>
       </div>
-      <label className="form-group">My current idea<textarea rows={3} maxLength={10000} placeholder="Add an idea now or as it develops…" value={editing.idea} onChange={e => change('idea', e.target.value)} /></label>
-      <label className="form-group">Notes (optional)<textarea rows={2} maxLength={10000} value={editing.notes} onChange={e => change('notes', e.target.value)} /></label>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="flex gap-2"><button className="btn btn-primary btn-sm">Save hackathon</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>Cancel</button></div>
+      <p className="text-muted text-sm mb-3">Saved immediately. AI will fill the event facts; you can review or change them later.</p>
+      {error && <p className="form-error mb-3" role="alert">{error}</p>}
+      <div className="flex gap-2"><button className="btn btn-primary">Save & autofill</button><button type="button" className="btn btn-ghost" onClick={() => setAdding(false)}>Cancel</button></div>
     </form>}
-
-    <div className="tabs" style={{ marginBottom: 'var(--space-3)' }}>
-      <button className={`tab${!archived ? ' active' : ''}`} onClick={() => { setArchived(false); }}>Current ({all.filter(row => !row.archived).length})</button>
-      <button className={`tab${archived ? ' active' : ''}`} onClick={() => { setArchived(true); }}>Archived ({all.filter(row => row.archived).length})</button>
+    <div className="hackathon-toolbar">
+      <div className="tabs" style={{ marginBottom: 0 }}>{[['current', 'Opportunities'], ['submitted', 'Submitted'], ['archived', 'Archived']].map(([value, label]) => <button key={value} className={`tab${filter === value ? ' active' : ''}`} onClick={() => setFilter(value)}>{label}</button>)}</div>
+      <input aria-label="Search hackathons" placeholder="Search name or domain…" value={search} onChange={e => setSearch(e.target.value)} />
     </div>
-    <div className="flex flex-col gap-3">
+    <div className="hackathon-grid">
       {rows.map(row => {
         const deadline = hackathonDeadline(row);
-        const passed = Date.parse(deadline.value) < Date.now();
-        return <article key={row.id} className="hackathon-row">
-          <div className="hackathon-info">
-            <h3 className="text-sm" style={{ overflowWrap: 'anywhere' }}>{row.name}</h3>
-            <div className="flex items-center gap-2" style={{ flexWrap: 'wrap', marginTop: 4 }}>
-              <span className="text-muted text-xs">{deadline.label} due {formatDeadline(deadline.value)}</span>
-              {row.status === 'Registration Pending' && <span className="text-muted text-xs">Submission due {formatDeadline(row.deadline)}</span>}
-              {passed && <span className={`badge ${row.status === 'Submitted' ? 'badge-muted' : 'badge-red'}`}>Deadline passed</span>}
-              {row.status === 'Submitted' && <span className="badge badge-green">Submitted</span>}
-            </div>
-            <p className="hackathon-idea text-muted text-sm" title={row.idea}>{row.idea || 'No idea added yet.'}</p>
-          </div>
-          <div className="hackathon-actions">
-            <select aria-label={`Progress for ${row.name}`} value={row.status} onChange={e => {
-              if (e.target.value === 'Registration Pending' && !row.registrationDeadline) {
-                edit(row);
-                setEditing(current => ({ ...current, status: 'Registration Pending' }));
-                setError('Add the registration deadline before saving this status.');
-                return;
-              }
-              save({ ...row, status: e.target.value });
-              if (editing?.id === row.id) change('status', e.target.value);
-            }}>{HACKATHON_STATUSES.map(status => <option key={status}>{status}</option>)}</select>
-            <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-              {officialUrl(row.url) && <a className="btn btn-secondary btn-sm" href={officialUrl(row.url)} target="_blank" rel="noopener noreferrer">Official page ↗</a>}
-              <button className="btn btn-secondary btn-sm" onClick={() => edit(row)}>View / Edit</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => {
-                save({ ...row, archived: !row.archived });
-                if (editing?.id === row.id) change('archived', !row.archived);
-              }}>{row.archived ? 'Restore' : 'Archive'}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => {
-                if (!confirm(`Delete hackathon “${row.name}”?`)) return;
-                dispatch({ type: 'DELETE_HACKATHON', id: row.id });
-                if (editing?.id === row.id) setEditing(null);
-              }}>Delete</button>
-            </div>
-          </div>
+        const pending = researchingHackathons.includes(`${account.user.id}:${row.id}`);
+        return <article className="card hackathon-tile" key={row.id}>
+          <div className="flex items-center justify-between gap-2"><span className={`badge ${row.status === 'Submitted' ? 'badge-green' : 'badge-accent'}`}>{row.status}</span><span className="text-xs text-muted">{row.difficulty ? `${'★'.repeat(row.difficulty)}${'☆'.repeat(5 - row.difficulty)}` : 'Unrated'}</span></div>
+          <Link className="hackathon-name" to={`/hackathons/${row.id}`}>{row.name}</Link>
+          <div className="text-sm"><span className="text-muted">{deadline.label} deadline</span><div className={deadline.value && Date.parse(deadline.value) < Date.now() ? 'field-error' : ''}>{formatDeadline(deadline.value)}</div></div>
+          {row.status === 'Registration Pending' && row.deadline && <span className="text-xs text-muted">Submission · {formatDeadline(row.deadline)}</span>}
+          {row.idea && <p className="text-sm hackathon-preview">{row.idea}</p>}
+          <p className="text-sm text-muted hackathon-preview">{row.domains || 'Domains not reviewed yet'}</p>
+          {pending && <span className="text-xs text-muted" role="status">Reading event information…</span>}
+          {!pending && row.researchStatus === 'error' && <span className="text-xs field-error">Autofill needs attention</span>}
+          <div className="hackathon-tile-footer"><Link to={`/hackathons/${row.id}`} className="btn btn-secondary btn-sm">Detailed view →</Link><a href={officialUrl(row.url) || undefined} target="_blank" rel="noopener noreferrer" className="text-sm">Official ↗</a></div>
         </article>;
       })}
-      {!rows.length && <p className="text-muted text-sm">{archived ? 'No archived hackathons.' : 'No hackathons yet. Add one when you register.'}</p>}
     </div>
-  </section>;
+    {!rows.length && <div className="card empty-state"><span className="es-icon">🏁</span><p>{search ? 'No matching hackathons.' : 'No hackathons here yet.'}</p>{filter === 'current' && !search && <button className="btn btn-secondary" onClick={() => setAdding(true)}>Save your first opportunity</button>}</div>}
+  </div>;
 }

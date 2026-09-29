@@ -18,6 +18,8 @@ async function request(path, options = {}) {
 }
 
 export const remoteApi = {
+  researchHackathon: payload => request('/api/hackathons/research', { method: 'POST', body: JSON.stringify(payload) }),
+  matchHackathonIdeas: payload => request('/api/hackathons/match-ideas', { method: 'POST', body: JSON.stringify(payload) }),
   me: () => request('/api/auth/me'),
   changePassword: payload => request('/api/auth/password', { method: 'POST', body: JSON.stringify(payload) }),
   login: payload => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),

@@ -1284,28 +1284,38 @@ select option { background: var(--bg-card); }
   .carry-forward-actions .btn { width: 100%; justify-content: center; }
 }
 
-/* ── Compact dashboard hackathons ─────────────────────────────────── */
-.hackathon-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+/* ── Hackathon manager ─────────────────────────────────────────────── */
+.hackathon-heading { gap: var(--space-4); flex-wrap: wrap; }
+.hackathon-heading p { margin-top: var(--space-2); }
+.hackathon-toolbar { display: flex; gap: var(--space-3); justify-content: space-between; flex-wrap: wrap; margin-bottom: var(--space-4); }
+.hackathon-toolbar input { max-width: 320px; }
+.hackathon-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.hackathon-tile { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.hackathon-name { font-weight: 700; font-size: 1.05rem; color: var(--text-primary); overflow-wrap: anywhere; }
+.hackathon-preview { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.hackathon-tile-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: auto; }
+.hackathon-deadlines { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.hackathon-deadlines .card { display: flex; align-items: flex-start; flex-direction: column; gap: var(--space-2); }
+.hackathon-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-4); }
+.hackathon-detail h1, .hackathon-fact-text { overflow-wrap: anywhere; }
+.hackathon-fact-text { white-space: pre-wrap; font-size: .875rem; line-height: 1.65; margin-top: var(--space-3); }
+.hackathon-sources { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); font-size: .75rem; overflow-wrap: anywhere; }
+.hackathon-research-note { padding: var(--space-3) var(--space-4); border-left: 3px solid var(--accent); background: var(--accent-dim); border-radius: var(--radius-sm); font-size: .8rem; line-height: 1.6; }
+.hackathon-research-note ul { padding-left: var(--space-5); margin-top: var(--space-2); }
+.hackathon-stars button { background: transparent; border: 0; font-size: 1.7rem; color: var(--text-muted); cursor: pointer; padding: 2px; }
+.hackathon-stars button.selected { color: var(--yellow); }
+.hackathon-stars button:focus-visible { outline: 2px solid var(--accent); border-radius: var(--radius-sm); }
+.hackathon-stars > span { display: block; margin-top: var(--space-2); }
+.hackathon-search-suggestions { width: 100%; height: 120px; border: 0; border-radius: var(--radius-sm); background: var(--bg-card); }
+.hackathon-reminder { padding: var(--space-3) var(--space-4); border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-dim); box-shadow: 0 0 16px var(--accent-glow); }
+.hackathon-reminder-line { display: flex; gap: var(--space-3); justify-content: space-between; font-size: .8rem; margin-top: var(--space-2); flex-wrap: wrap; overflow-wrap: anywhere; }
+.hackathon-reminder-line span { color: var(--text-secondary); }
+@media (max-width: 1100px) {
+  .hackathon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hackathon-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.hackathon-info { flex: 1; min-width: 0; }
-.hackathon-idea {
-  margin-top: var(--space-2);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow-wrap: anywhere;
-}
-.hackathon-actions { display: flex; flex-direction: column; gap: var(--space-2); max-width: 360px; }
-.hackathon-actions select { font-size: 0.8rem; }
-@media (max-width: 768px) {
-  .hackathon-row { flex-direction: column; align-items: stretch; }
-  .hackathon-actions { max-width: none; }
+@media (max-width: 700px) {
+  .hackathon-grid, .hackathon-detail-grid, .hackathon-deadlines { grid-template-columns: minmax(0, 1fr); }
+  .hackathon-toolbar input { max-width: none; }
+  .hackathon-heading .btn { padding: var(--space-2) var(--space-3); font-size: .8rem; }
 }

@@ -1,6 +1,6 @@
 // The legacy key is read-only. New data is cached under its authenticated owner.
 export function emptyState() {
-  return { subjects: [], topics: [], recallSessions: [], worksheets: [], hackathons: [],
+  return { subjects: [], topics: [], recallSessions: [], worksheets: [], hackathons: [], hackathonIdeas: [],
     timetable: { Mon: [], Tue: [], Wed: [], Thu: [], Fri: [], Sat: [], Sun: [] },
     weeklyChecklist: [], weeklyTasks: [], contestWeeks: [], carryForwardPromptedDates: [], _seeded: true };
 }
@@ -24,7 +24,7 @@ export function readLegacy() {
 export function parseBackup(raw) {
   const value = JSON.parse(raw);
   if (!value || !Array.isArray(value.subjects) || !Array.isArray(value.topics)) throw new Error('This is not a tracker backup.');
-  for (const key of ['subjects', 'topics', 'recallSessions', 'worksheets', 'hackathons', 'contestWeeks', 'weeklyChecklist', 'weeklyTasks']) {
+  for (const key of ['subjects', 'topics', 'recallSessions', 'worksheets', 'hackathons', 'hackathonIdeas', 'contestWeeks', 'weeklyChecklist', 'weeklyTasks']) {
     if (value[key] !== undefined && (!Array.isArray(value[key]) || value[key].some(row => !row || typeof row.id !== 'string'))) {
       throw new Error(`Invalid ${key} in backup.`);
     }
@@ -45,7 +45,7 @@ export function downloadBackup(state, label = 'backup') {
 // than silently overwriting either version of the user's work.
 export function mergeImport(current, incoming) {
   const result = { ...incoming, ...current };
-  for (const key of ['subjects', 'topics', 'recallSessions', 'worksheets', 'hackathons', 'contestWeeks', 'weeklyChecklist', 'weeklyTasks']) {
+  for (const key of ['subjects', 'topics', 'recallSessions', 'worksheets', 'hackathons', 'hackathonIdeas', 'contestWeeks', 'weeklyChecklist', 'weeklyTasks']) {
     const rows = new Map((current[key] || []).map(row => [row.id, row]));
     for (const row of incoming[key] || []) {
       const existing = rows.get(row.id);

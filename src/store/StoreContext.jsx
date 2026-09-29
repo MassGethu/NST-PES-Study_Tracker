@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyState, normalizeState, readCache, writeCache, downloadBackup } from './accountStorage.js';
-import { isHackathonUser } from './hackathons.js';
+import { isHackathonUser, applyHackathonFacts } from './hackathons.js';
 import { remoteApi } from './remoteApi.js';
 import { uuid, today, getMondayOf } from './utils.js';
 import { markRevised as applyMarkRevised } from './revisionLogic.js';
@@ -41,6 +41,13 @@ function matchesContest(contest, action) {
 
 function reducer(state, action) {
   switch (action.type) {
+    case 'SAVE_HACKATHON_IDEA':
+      return { ...state, hackathonIdeas: [...state.hackathonIdeas.filter(i => i.id !== action.payload.id), action.payload] };
+    case 'DELETE_HACKATHON_IDEA':
+      return { ...state, hackathonIdeas: state.hackathonIdeas.filter(i => i.id !== action.id),
+        hackathons: state.hackathons.map(h => h.ideaId === action.id ? { ...h, ideaId: '' } : h) };
+    case 'UPDATE_HACKATHON':
+      return { ...state, hackathons: state.hackathons.map(h => h.id === action.id ? { ...h, ...action.payload } : h) };
     case 'SAVE_HACKATHON':
       return { ...state, hackathons: [...state.hackathons.filter(h => h.id !== action.payload.id), action.payload] };
     case 'DELETE_HACKATHON':
@@ -302,16 +309,44 @@ export function StoreProvider({ children }) {
   const queueRef = useRef(Promise.resolve());
   const timerRef = useRef(null);
   const connectingRef = useRef(null);
+  const researchRef = useRef(new Set());
+  const [researchingHackathons, setResearchingHackathons] = useState([]);
 
   function dispatch(action) {
     if (!sessionRef.current) return;
-    if (['SAVE_HACKATHON', 'DELETE_HACKATHON'].includes(action.type) && !isHackathonUser(account.user)) return;
+    if (['SAVE_HACKATHON', 'DELETE_HACKATHON', 'UPDATE_HACKATHON', 'SAVE_HACKATHON_IDEA', 'DELETE_HACKATHON_IDEA'].includes(action.type) && !isHackathonUser(account.user)) return;
     const next = reducer(stateRef.current, action);
     stateRef.current = next;
     pendingRef.current = true;
     rawDispatch({ type: 'REPLACE_STORE', payload: next });
     try { writeCache(sessionRef.current.id, next, sessionRef.current.version, true); }
     catch { setAccount(a => ({ ...a, error: 'Browser backup is full. Keep this page open until online saving finishes.' })); }
+  }
+
+  async function researchHackathon(id) {
+    const session = sessionRef.current;
+    const captured = stateRef.current.hackathons.find(h => h.id === id);
+    const key = `${session?.id}:${id}`;
+    if (!session || !captured || !isHackathonUser(account.user) || researchRef.current.has(key)) return;
+    researchRef.current.add(key);
+    setResearchingHackathons([...researchRef.current]);
+    dispatch({ type: 'UPDATE_HACKATHON', id, payload: { researchStatus: 'running', researchError: '' } });
+    try {
+      const result = await remoteApi.researchHackathon({ name: captured.name, url: captured.url });
+      if (sessionRef.current !== session) return;
+      const current = stateRef.current.hackathons.find(h => h.id === id);
+      if (!current) return;
+      if (current.name !== captured.name || current.url !== captured.url) {
+        dispatch({ type: 'UPDATE_HACKATHON', id, payload: { researchStatus: 'error', researchError: 'Name or URL changed. Run autofill again for the new event.' } });
+        return;
+      }
+      dispatch({ type: 'UPDATE_HACKATHON', id, payload: applyHackathonFacts(current, captured, result) });
+    } catch (error) {
+      if (sessionRef.current === session) dispatch({ type: 'UPDATE_HACKATHON', id, payload: { researchStatus: 'error', researchError: error.message } });
+    } finally {
+      researchRef.current.delete(key);
+      setResearchingHackathons([...researchRef.current]);
+    }
   }
 
   async function connectAccount(user) {
@@ -456,7 +491,7 @@ export function StoreProvider({ children }) {
   }), [state, isWorksheet]);
 
   return (
-    <StoreContext.Provider value={{ state, dispatch, derived, account, login, logout, isWorksheet, flush, reloadServer }}>
+    <StoreContext.Provider value={{ state, dispatch, derived, account, login, logout, isWorksheet, flush, reloadServer, researchHackathon, researchingHackathons }}>
       {children}
     </StoreContext.Provider>
   );

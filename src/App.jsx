@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider, useStore } from './store/StoreContext.jsx';
 import Login from './pages/Login.jsx';
+import HackathonDetail from './pages/HackathonDetail.jsx';
+import HackathonIdeas from './pages/HackathonIdeas.jsx';
 import Hackathons from './pages/Hackathons.jsx';
 import { isHackathonUser } from './store/hackathons.js';
 import Worksheets from './pages/Worksheets.jsx';
@@ -37,6 +39,8 @@ function AccountApp() {
         <Layout>
           <Routes>
             <Route path="/"         element={<Dashboard />} />
+            <Route path="/hackathons/ideas" element={isHackathonUser(account.user) ? <HackathonIdeas /> : <Navigate to="/" replace />} />
+            <Route path="/hackathons/:id" element={isHackathonUser(account.user) ? <HackathonDetail /> : <Navigate to="/" replace />} />
             <Route path="/hackathons" element={isHackathonUser(account.user) ? <Hackathons /> : <Navigate to="/" replace />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/log"      element={<LectureLog />} />
