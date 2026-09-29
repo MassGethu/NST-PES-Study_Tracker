@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/StoreContext.jsx';
 import { worksheetsDueThisWeek } from '../store/worksheets.js';
+import HackathonsCard from '../components/HackathonsCard.jsx';
 import ChecklistBlock from '../components/ChecklistBlock.jsx';
 import RevisionRow from '../components/RevisionRow.jsx';
 import ConfidenceGauge from '../components/ConfidenceGauge.jsx';
@@ -451,6 +452,8 @@ export default function Dashboard() {
             dispatch={dispatch}
           />
         </div>
+
+        <HackathonsCard />
 
         {/* Revision Due */}
         <div className="card">

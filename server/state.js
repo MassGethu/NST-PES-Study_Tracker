@@ -1,6 +1,7 @@
 const express = require('express');
 const { getPool } = require('./database');
 const { requireUser } = require('./auth');
+const { validateHackathons } = require('./hackathons');
 
 const router = express.Router();
 
@@ -25,6 +26,10 @@ router.put('/', requireUser, async (req, res, next) => {
     const baseVersion = Number(req.body.baseVersion);
     if (!state || typeof state !== 'object' || Array.isArray(state)) {
       return res.status(400).json({ error: 'A valid application state object is required.' });
+    }
+    const hackathonError = validateHackathons(state.hackathons, req.user);
+    if (hackathonError) {
+      return res.status(req.user.username?.toLowerCase() !== 'aadarsh' && Array.isArray(state.hackathons) && state.hackathons.length ? 403 : 400).json({ error: hackathonError });
     }
     if (!Number.isInteger(baseVersion) || baseVersion < 0) {
       return res.status(400).json({ error: 'A valid baseVersion is required.' });

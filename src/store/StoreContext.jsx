@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyState, normalizeState, readCache, writeCache, downloadBackup } from './accountStorage.js';
+import { isHackathonUser } from './hackathons.js';
 import { remoteApi } from './remoteApi.js';
 import { uuid, today, getMondayOf } from './utils.js';
 import { markRevised as applyMarkRevised } from './revisionLogic.js';
@@ -40,6 +41,10 @@ function matchesContest(contest, action) {
 
 function reducer(state, action) {
   switch (action.type) {
+    case 'SAVE_HACKATHON':
+      return { ...state, hackathons: [...state.hackathons.filter(h => h.id !== action.payload.id), action.payload] };
+    case 'DELETE_HACKATHON':
+      return { ...state, hackathons: state.hackathons.filter(h => h.id !== action.id) };
     case 'SAVE_WORKSHEET':
       return { ...state, worksheets: [...(state.worksheets || []).filter(w => w.id !== action.payload.id), action.payload] };
     case 'DELETE_WORKSHEET':
@@ -300,6 +305,7 @@ export function StoreProvider({ children }) {
 
   function dispatch(action) {
     if (!sessionRef.current) return;
+    if (['SAVE_HACKATHON', 'DELETE_HACKATHON'].includes(action.type) && !isHackathonUser(account.user)) return;
     const next = reducer(stateRef.current, action);
     stateRef.current = next;
     pendingRef.current = true;
