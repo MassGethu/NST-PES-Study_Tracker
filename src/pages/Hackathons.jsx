@@ -39,7 +39,7 @@ export default function Hackathons() {
       </div>
       <p className="text-muted text-sm mb-3">Saved immediately. AI will fill the event facts; you can review or change them later.</p>
       {error && <p className="form-error mb-3" role="alert">{error}</p>}
-      <div className="flex gap-2"><button className="btn btn-primary">Save & autofill</button><button type="button" className="btn btn-ghost" onClick={() => setAdding(false)}>Cancel</button></div>
+      <div className="flex gap-2"><button className="btn btn-primary">Save & AI autofill</button><button type="button" className="btn btn-ghost" onClick={() => setAdding(false)}>Cancel</button></div>
     </form>}
     <div className="hackathon-toolbar">
       <div className="tabs" style={{ marginBottom: 0 }}>{[['current', 'Opportunities'], ['submitted', 'Submitted'], ['archived', 'Archived']].map(([value, label]) => <button key={value} className={`tab${filter === value ? ' active' : ''}`} onClick={() => setFilter(value)}>{label}</button>)}</div>

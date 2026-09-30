@@ -19,6 +19,8 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { initializeDatabase, closeDatabase, isDatabaseConfigured } = require('./database');
 const { authRouter, optionalUser, requireUser } = require('./auth');
 const stateRouter = require('./state');
+const { sdkFailure } = require('./geminiErrors');
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
 const app = express();
 const PORT = process.env.API_PORT || 3001;
@@ -85,7 +87,7 @@ app.post('/api/ai-notes', requireAccountWhenHosted, async (req, res) => {
     const { topicName, subject, bullets = [], concepts = [], notes = '', photos = [], audio = null } = req.body;
 
     const genAI = getGemini();
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     // Build multimodal parts
     const parts = [];
@@ -146,7 +148,8 @@ Be concise. Do not add padding. Do not start with "Sure!" or any filler phrase.`
     res.json({ summary });
   } catch (err) {
     console.error('[/api/ai-notes]', err.message);
-    res.status(500).json({ error: err.message });
+    const failure = sdkFailure(err, GEMINI_MODEL);
+    res.status(failure.status || 500).json({ error: failure.message, code: failure.code, diagnostics: failure.diagnostics });
   }
 });
 
@@ -172,7 +175,7 @@ app.post('/api/active-recall', requireAccountWhenHosted, async (req, res) => {
     }
 
     const genAI = getGemini();
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const prompt = `A student is doing ONE combined active recall session covering these related lectures and labs: "${topicName}".
 
@@ -214,7 +217,8 @@ Keep all sections to 5 bullet points or fewer. No padding phrases.`;
     res.json({ feedback });
   } catch (err) {
     console.error('[/api/active-recall]', err.message);
-    res.status(500).json({ error: err.message });
+    const failure = sdkFailure(err, GEMINI_MODEL);
+    res.status(failure.status || 500).json({ error: failure.message, code: failure.code, diagnostics: failure.diagnostics });
   }
 });
 

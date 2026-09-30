@@ -26,10 +26,12 @@ function validateHackathons(rows, user) {
     if (!optionalDate(row.nextActionDate)) return 'Enter a valid next action date.';
     if (row.difficulty != null && ![1, 2, 3, 4, 5].includes(row.difficulty)) return 'Difficulty must be 1–5 stars.';
     if (typeof row.archived !== 'boolean') return 'Choose a valid hackathon archive state.';
+    if (row.sourceText !== undefined && !text(row.sourceText, 40000)) return 'Invalid event source text.';
+    if (row.researchCache !== undefined && JSON.stringify(row.researchCache).length > 150000) return 'Event research cache is too large.';
     if (row.sources !== undefined) {
       if (!row.sources || typeof row.sources !== 'object' || Array.isArray(row.sources)) return 'Invalid event sources.';
       for (const sources of Object.values(row.sources)) {
-        if (!Array.isArray(sources) || sources.length > 20 || sources.some(s => !s || !validUrl(s.url) || !text(s.title, 500))) return 'Invalid event sources.';
+        if (!Array.isArray(sources) || sources.length > 20 || sources.some(s => !s || !validUrl(s.url) || !text(s.title, 500) || (s.excerpt !== undefined && !text(s.excerpt, 1000)))) return 'Invalid event sources.';
       }
     }
     if (row.researchWarnings !== undefined && (!Array.isArray(row.researchWarnings) || row.researchWarnings.length > 20 || row.researchWarnings.some(w => !text(w, 1000)))) return 'Invalid event warnings.';

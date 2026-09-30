@@ -2,15 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/StoreContext.jsx';
 import { fmtDate, uuid } from '../store/utils.js';
-
-function referencesFor(topics) {
-  return topics.map(topic => ({
-    id: topic.id, topicName: topic.topicName, date: topic.date,
-    sessionType: topic.sessionType || 'lecture', subjectId: topic.subjectId,
-    concepts: topic.concepts || [],
-    reference: topic.ai_notes?.trim() || [...(topic.bullets || []), topic.notes || ''].filter(Boolean).join('\n'),
-  }));
-}
+import { referencesFor, hasRecallReference, recallStatus } from '../store/recall.js';
 
 export default function ActiveRecall() {
   const { state, dispatch } = useStore();
@@ -78,7 +70,10 @@ export default function ActiveRecall() {
     const tagMatch = tags.map(tag => ({ tag, covered: normalized(session.response).includes(normalized(tag)) }));
     const base = { ...session, tagMatch, missingReferences: missing };
     try {
-      if (!available.length) throw new Error('No saved notes are available for these lectures. Your response is saved; AI assessment requires reference notes.');
+      if (!available.length) {
+        save({ ...base, status: 'needs-notes', error: 'Your response is saved. AI has not been called: these entries need reference notes. Open a lecture below, add learning bullets or generate AI notes from your saved photos/audio, then retry.', feedback: '' });
+        return;
+      }
       const response = await fetch('/api/active-recall', {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,6 +103,7 @@ export default function ActiveRecall() {
     <p style={{ margin: '12px 0 24px' }}>Bring related lectures and labs together, then explain the topic from memory.</p>
     {draft ? <section className="card">
       <h2>Your recall session</h2>
+      {draft.lectures.some(lecture => !lecture.reference.trim()) && <p className="text-muted mt-3" role="status">Some selected entries have no reference notes. You can save your response now; AI can assess only entries with notes. Concept tags and a topic title alone are not reference notes.</p>}
       <p style={{ margin: '12px 0' }}>{draft.lectures.length} entries selected · Notes and feedback stay hidden until you submit.</p>
       <ul>{draft.lectures.map(lecture => <li key={lecture.id}>{lecture.topicName} · {fmtDate(lecture.date)} · {lecture.sessionType}</li>)}</ul>
       <label htmlFor="recall-answer" className="form-label" style={{ marginTop: 24 }}>What do you remember?</label>
@@ -115,7 +111,7 @@ export default function ActiveRecall() {
       {error && <p role="alert">{error}</p>}
       <div className="recall-controls">
         <button className="btn btn-secondary" onClick={speak}>{listening ? 'Stop speaking' : 'Speak your response'}</button>
-        <button className="btn btn-primary" disabled={!answer.trim() || busy || listening} onClick={submit}>Finish & assess recall</button>
+        <button className="btn btn-primary" disabled={!answer.trim() || busy || listening} onClick={submit}>{draft.lectures.some(lecture => lecture.reference.trim()) ? 'Finish & assess recall' : 'Save response (notes needed)'}</button>
         <button className="btn btn-ghost" onClick={() => {
           if (answer.trim() && !window.confirm('Discard this unfinished response?')) return;
           recognition.current?.abort(); setDraft(null);
@@ -125,7 +121,7 @@ export default function ActiveRecall() {
     </section> : <>
       {result ? <section className="card">
         <h2>Session review</h2>
-        <p>{new Date(result.submittedAt).toLocaleString()} · {result.status === 'complete' ? 'Assessed' : 'Assessment pending'}</p>
+        <p>{new Date(result.submittedAt).toLocaleString()} · {recallStatus(result)}</p>
         <h3 style={{ marginTop: 24 }}>Lectures & labs</h3>
         <ul>{result.lectures.map(lecture => <li key={lecture.id}>
           {topics.some(topic => topic.id === lecture.id)
@@ -140,16 +136,19 @@ export default function ActiveRecall() {
         <ul>{(result.tagMatch || []).map(item => <li key={item.tag}>{item.covered ? '✓ Mentioned' : '○ Not mentioned'}: {item.tag}</li>)}</ul>
         {!result.tagMatch?.length && <p>No concept tags were saved for these entries.</p>}
         <h3 style={{ marginTop: 24 }}>Feedback & points to improve</h3>
-        {result.missingReferences?.length > 0 && <p role="status">Assessment excludes entries without notes: {result.missingReferences.join(', ')}.</p>}
+        {result.missingReferences?.length > 0 && <p role="status">Reference notes missing: {result.missingReferences.join(', ')}.</p>}
         {busy ? <p role="status">Assessing your combined response…</p> : <>
           {result.feedback && <div style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{result.feedback}</div>}
           {result.error && <p role="alert">{result.error}</p>}
           {result.status !== 'complete' && <button className="btn btn-secondary" onClick={() => grade({
             ...result, lectures: result.lectures.map(lecture => {
               const latest = topics.find(topic => topic.id === lecture.id);
-              return latest ? referencesFor([latest])[0] : lecture;
+              if (!latest) return lecture;
+              const updated = referencesFor([latest])[0];
+              return { ...updated, reference: updated.reference || lecture.reference };
             }),
-          })}>Retry assessment</button>}
+          })} disabled={!result.lectures.some(lecture => lecture.reference?.trim() || topics.some(topic => topic.id === lecture.id && hasRecallReference(topic)))}>Retry assessment</button>}
+          {recallStatus(result) === 'Notes needed' && <p className="text-sm text-muted mt-3">Use a lecture link above to add notes. Retry becomes available once a reference is saved.</p>}
         </>}
         <div className="recall-controls"><button className="btn btn-primary" disabled={busy} onClick={() => setParams({})}>New session</button></div>
       </section> : <section className="card">
@@ -164,7 +163,7 @@ export default function ActiveRecall() {
         <div className="recall-picker">
           {visible.map(topic => <label key={topic.id} className="recall-choice">
             <input type="checkbox" checked={selected.includes(topic.id)} onChange={event => setSelected(current => event.target.checked ? [...current, topic.id] : current.filter(id => id !== topic.id))} />
-            <span>{topic.topicName}<small>{state.subjects.find(item => item.id === topic.subjectId)?.name} · {fmtDate(topic.date)} · {topic.sessionType || 'lecture'}</small></span>
+            <span>{topic.topicName}<small>{state.subjects.find(item => item.id === topic.subjectId)?.name} · {fmtDate(topic.date)} · {topic.sessionType || 'lecture'} · {hasRecallReference(topic) ? 'Ready for AI assessment' : 'Notes needed for AI assessment'}</small></span>
           </label>)}
           {!visible.length && <p>No lectures match. Log a lecture first or change the filters.</p>}
         </div>
@@ -182,7 +181,7 @@ export default function ActiveRecall() {
           className="recall-history-link" key={session.id} to={'/recall?session=' + session.id}
           onClick={event => { if (busy) event.preventDefault(); }}
         >{session.lectures.map(lecture => lecture.topicName).join(' + ')}
-          <small>{new Date(session.submittedAt).toLocaleString()} · {session.status === 'complete' ? 'View feedback & improvements' : 'Response saved · assessment pending'}</small>
+          <small>{new Date(session.submittedAt).toLocaleString()} · {session.status === 'complete' ? 'View feedback & improvements' : 'Response saved · ' + recallStatus(session).toLowerCase()}</small>
         </Link>)}
       </section>
     </>}

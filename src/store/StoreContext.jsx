@@ -310,6 +310,8 @@ export function StoreProvider({ children }) {
   const timerRef = useRef(null);
   const connectingRef = useRef(null);
   const researchRef = useRef(new Set());
+  const researchQueue = useRef(Promise.resolve());
+  const researchCooldown = useRef({ until: 0, message: '' });
   const [researchingHackathons, setResearchingHackathons] = useState([]);
 
   function dispatch(action) {
@@ -323,7 +325,7 @@ export function StoreProvider({ children }) {
     catch { setAccount(a => ({ ...a, error: 'Browser backup is full. Keep this page open until online saving finishes.' })); }
   }
 
-  async function researchHackathon(id) {
+  async function researchHackathon(id, options = {}) {
     const session = sessionRef.current;
     const captured = stateRef.current.hackathons.find(h => h.id === id);
     const key = `${session?.id}:${id}`;
@@ -332,17 +334,37 @@ export function StoreProvider({ children }) {
     setResearchingHackathons([...researchRef.current]);
     dispatch({ type: 'UPDATE_HACKATHON', id, payload: { researchStatus: 'running', researchError: '' } });
     try {
-      const result = await remoteApi.researchHackathon({ name: captured.name, url: captured.url });
+      const input = JSON.stringify([captured.name, captured.url, captured.sourceText || '']);
+      let result;
+      if (!options.refresh && captured.researchCache?.input === input && Date.now() - Date.parse(captured.researchCache.result?.researchedAt) < 86400000) {
+        result = captured.researchCache.result;
+      } else {
+        const job = researchQueue.current.catch(() => {}).then(async () => {
+          if (sessionRef.current !== session) throw new Error('Account changed.');
+          if (researchCooldown.current.until > Date.now()) throw new Error(researchCooldown.current.message);
+          try {
+            return await remoteApi.researchHackathon({ name: captured.name, url: captured.url, sourceText: captured.sourceText || '' });
+          } catch (error) {
+            if (error.data?.diagnostics?.providerStatus === 429) {
+              const delay = error.data.diagnostics.retryAfterSeconds || 60;
+              researchCooldown.current = { until: Date.now() + delay * 1000, message: error.message };
+            }
+            throw error;
+          }
+        });
+        researchQueue.current = job.then(() => new Promise(resolve => setTimeout(resolve, 2000)), () => new Promise(resolve => setTimeout(resolve, 2000)));
+        result = await job;
+      }
       if (sessionRef.current !== session) return;
       const current = stateRef.current.hackathons.find(h => h.id === id);
       if (!current) return;
-      if (current.name !== captured.name || current.url !== captured.url) {
+      if (current.name !== captured.name || current.url !== captured.url || current.sourceText !== captured.sourceText) {
         dispatch({ type: 'UPDATE_HACKATHON', id, payload: { researchStatus: 'error', researchError: 'Name or URL changed. Run autofill again for the new event.' } });
         return;
       }
-      dispatch({ type: 'UPDATE_HACKATHON', id, payload: applyHackathonFacts(current, captured, result) });
+      dispatch({ type: 'UPDATE_HACKATHON', id, payload: { ...applyHackathonFacts(current, captured, result), researchCache: { input, result } } });
     } catch (error) {
-      if (sessionRef.current === session) dispatch({ type: 'UPDATE_HACKATHON', id, payload: { researchStatus: 'error', researchError: error.message } });
+      if (sessionRef.current === session) dispatch({ type: 'UPDATE_HACKATHON', id, payload: { researchStatus: 'error', researchError: error.message, researchDiagnostics: error.data?.diagnostics || null } });
     } finally {
       researchRef.current.delete(key);
       setResearchingHackathons([...researchRef.current]);

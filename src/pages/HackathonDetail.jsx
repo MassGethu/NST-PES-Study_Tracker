@@ -9,6 +9,7 @@ function Fact({ row, field, heading }) {
     <h3>{heading || EVENT_LABELS[field]}</h3>
     <p className={`hackathon-fact-text${!row[field] ? ' text-muted' : ''}`}>{row[field] || (field === 'notes' ? 'No notes yet.' : 'Unknown — add this when you review the event.')}</p>
     {row.sources?.[field]?.length > 0 && <div className="hackathon-sources">{row.sources[field].map((source, i) => <a key={`${source.url}:${i}`} href={officialUrl(source.url) || undefined} target="_blank" rel="noopener noreferrer">{source.title || 'Source'} ↗</a>)}</div>}
+    {row.sources?.[field]?.some(source => source.excerpt) && <details className="text-xs mt-3"><summary>Supporting text</summary>{row.sources[field].filter(source => source.excerpt).map((source, i) => <blockquote key={i}>{source.pasted ? 'Pasted text: ' : ''}{source.excerpt}</blockquote>)}</details>}
   </div>;
 }
 function Stars({ value, onChange }) {
@@ -53,14 +54,26 @@ export default function HackathonDetail() {
     <Link to="/hackathons" className="text-muted text-sm">← Hackathon Manager</Link>
     <div className="section-header hackathon-heading mt-3">
       <div><span className="badge badge-accent">{row.archived ? 'Archived' : row.status}</span><h1 className="mt-3">{row.name}</h1><a href={officialUrl(row.url) || undefined} target="_blank" rel="noopener noreferrer">Open official page ↗</a></div>
-      <div className="flex gap-2" style={{ flexWrap: 'wrap' }}><button className="btn btn-primary" onClick={startEditing}>Edit details</button><button className="btn btn-secondary" disabled={pending} onClick={() => researchHackathon(id)}>{pending ? 'Autofilling…' : 'Autofill missing facts'}</button></div>
+      <div className="flex gap-2" style={{ flexWrap: 'wrap' }}><button className="btn btn-primary" onClick={startEditing}>Edit details</button><button className="btn btn-secondary" disabled={pending} onClick={() => researchHackathon(id)}>{pending ? 'Autofilling…' : 'AI autofill missing facts'}</button></div>
     </div>
     <div className="hackathon-deadlines mb-4">
       {[['registrationDeadline', 'Registration'], ['deadline', 'Submission']].map(([key, label]) => <div className="card" key={key}><span className="text-sm text-muted">{label} deadline</span><strong>{formatDeadline(row[key])}</strong>{row[key] && Date.parse(row[key]) < Date.now() && <span className="badge badge-muted">Deadline passed</span>}</div>)}
     </div>
+    <details className="card mb-4">
+      <summary>AI source options · paste event text or refresh</summary>
+      <p className="text-muted mt-3">Autofill reads the official page, then Gemini extracts facts. If the page needs login or JavaScript, copy its rules and schedule here. Pasted text is labelled separately from fetched sources. Saved results are reused for 24 hours.</p>
+      <label className="form-group" htmlFor="event-source-text">Event text (optional, maximum 40,000 characters)</label>
+      <textarea id="event-source-text"  rows={6} maxLength={40000} value={row.sourceText || ''} onChange={e => { update({ sourceText: e.target.value }); }} />
+      <div className="flex gap-2 mt-3">
+        <button className="btn btn-secondary" disabled={pending} onClick={() => researchHackathon(id)}>Extract missing facts</button>
+        <button className="btn btn-secondary" disabled={pending} onClick={() => researchHackathon(id, { refresh: true })}>Refresh with AI</button>
+        {row.sourceText && <button className="btn btn-secondary" disabled={pending} onClick={() => { update({ sourceText: '' }); }}>Use official page instead</button>}
+      </div>
+    </details>
     <div className="hackathon-research-note mb-4" role="status">
-      {pending ? 'Saved. AI is reading the event facts; you can continue working here.' : row.researchStatus === 'running' ? 'Autofill was interrupted. Use “Autofill missing facts” to retry.' : row.researchStatus === 'error' ? row.researchError : row.researchAt ? `Facts filled ${formatDeadline(row.researchAt)}. Check the linked sources before acting on deadlines or rules.` : 'Event facts have not been filled yet. You can autofill or enter them yourself.'}
+      {pending ? 'Saved. Autofill is queued or reading the event facts; you can continue working here.' : row.researchStatus === 'running' ? 'Autofill was interrupted. Use “Autofill missing facts” to retry.' : row.researchStatus === 'error' ? row.researchError : row.researchAt ? `Facts filled ${formatDeadline(row.researchAt)}. Check the linked sources before acting on deadlines or rules.` : 'Event facts have not been filled yet. You can autofill or enter them yourself.'}
       {!pending && row.researchWarnings?.length > 0 && <ul>{row.researchWarnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>}
+      {row.researchStatus === 'error' && row.researchDiagnostics?.model && <div className="text-xs mt-3">Model: {row.researchDiagnostics.model}{row.researchDiagnostics.quotas?.length ? ` · Quota: ${row.researchDiagnostics.quotas.join(', ')}` : ''}</div>}
     </div>
     {error && <p className="form-error mb-4" role="alert">{error}</p>}
     {editing && <form className="card flex flex-col gap-4 mb-4" onSubmit={e => {
