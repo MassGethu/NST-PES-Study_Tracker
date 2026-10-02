@@ -42,6 +42,10 @@ export function localDeadline(value) {
 }
 export function formatDeadline(value) {
   if (!value || !Number.isFinite(Date.parse(value))) return 'Unknown';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-').map(Number);
+    return `${new Date(year, month - 1, day).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} · time unknown`;
+  }
   return new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 

@@ -104,7 +104,7 @@ export default function HackathonDetail() {
     <div className="hackathon-detail-grid">
       <div className="card flex flex-col gap-4">
         <label className="form-group">Progress<select value={row.status} onChange={e => update({ status: e.target.value })}>{HACKATHON_STATUSES.map(s => <option key={s}>{s}</option>)}</select></label>
-        <div><h3 className="mb-3">Current idea</h3><p className="hackathon-fact-text">{row.idea || 'No idea selected yet. Review the domains, then choose an idea or develop a new one.'}</p>{selectedIdea && <Link to="/hackathons/ideas" className="text-xs">Original: {selectedIdea.title} ↗</Link>}</div>
+        <div><h3 className="mb-3">Current idea</h3><p className="hackathon-fact-text hackathon-idea-preview">{row.idea || 'No idea selected yet. Review the domains, then choose an idea or develop a new one.'}</p>{selectedIdea && <Link to="/hackathons/ideas" className="text-xs">Original: {selectedIdea.title} ↗</Link>}</div>
         <div><h3 className="mb-3">Next action</h3><p className="hackathon-fact-text">{row.nextAction || 'Choose your next step when you review this opportunity.'}</p>{row.nextActionDate && <span className="text-xs text-muted">Target: {row.nextActionDate}</span>}</div>
         <button className="btn btn-secondary btn-sm" onClick={startEditing}>Update idea / next action</button>
       </div>

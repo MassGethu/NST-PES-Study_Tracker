@@ -50,6 +50,8 @@ function reducer(state, action) {
       return { ...state, hackathons: state.hackathons.map(h => h.id === action.id ? { ...h, ...action.payload } : h) };
     case 'SAVE_HACKATHON':
       return { ...state, hackathons: [...state.hackathons.filter(h => h.id !== action.payload.id), action.payload] };
+    case 'IMPORT_HACKATHONS':
+      return { ...state, hackathons: [...state.hackathons, ...action.payload] };
     case 'DELETE_HACKATHON':
       return { ...state, hackathons: state.hackathons.filter(h => h.id !== action.id) };
     case 'SAVE_WORKSHEET':
@@ -316,7 +318,7 @@ export function StoreProvider({ children }) {
 
   function dispatch(action) {
     if (!sessionRef.current) return;
-    if (['SAVE_HACKATHON', 'DELETE_HACKATHON', 'UPDATE_HACKATHON', 'SAVE_HACKATHON_IDEA', 'DELETE_HACKATHON_IDEA'].includes(action.type) && !isHackathonUser(account.user)) return;
+    if (['SAVE_HACKATHON', 'IMPORT_HACKATHONS', 'DELETE_HACKATHON', 'UPDATE_HACKATHON', 'SAVE_HACKATHON_IDEA', 'DELETE_HACKATHON_IDEA'].includes(action.type) && !isHackathonUser(account.user)) return;
     const next = reducer(stateRef.current, action);
     stateRef.current = next;
     pendingRef.current = true;

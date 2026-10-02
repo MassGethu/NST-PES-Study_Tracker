@@ -1299,6 +1299,7 @@ select option { background: var(--bg-card); }
 .hackathon-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-4); }
 .hackathon-detail h1, .hackathon-fact-text { overflow-wrap: anywhere; }
 .hackathon-fact-text { white-space: pre-wrap; font-size: .875rem; line-height: 1.65; margin-top: var(--space-3); }
+.hackathon-idea-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .hackathon-sources { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); font-size: .75rem; overflow-wrap: anywhere; }
 .hackathon-research-note { padding: var(--space-3) var(--space-4); border-left: 3px solid var(--accent); background: var(--accent-dim); border-radius: var(--radius-sm); font-size: .8rem; line-height: 1.6; }
 .hackathon-research-note ul { padding-left: var(--space-5); margin-top: var(--space-2); }
