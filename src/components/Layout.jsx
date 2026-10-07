@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { to: '/settings', icon: '⚙️',  label: 'Settings' },
 ];
 
-export default function Layout({ children }) {
+export default function Layout({ children, palette, onPaletteChange }) {
   const todayStr = fmtDate(today());
   const { isWorksheet, account } = useStore();
   const navItems = NAV_ITEMS.map(item => isWorksheet && item.to === '/contest'
@@ -59,7 +59,12 @@ export default function Layout({ children }) {
       <div className="main-content">
         <header className="top-bar">
           <PageTitle />
-          <span className="today-badge">{todayStr}</span>
+          <div className="top-bar-actions">
+            {onPaletteChange && <label className="palette-picker"><span>🎨</span><select aria-label="Colour palette" value={palette} onChange={event => onPaletteChange(event.target.value)}>
+              <option value="dark">Dark indigo</option><option value="pink">Rithika’s pink</option>
+            </select></label>}
+            <span className="today-badge">{todayStr}</span>
+          </div>
         </header>
         <main className="page-body fade-in">
           {children}

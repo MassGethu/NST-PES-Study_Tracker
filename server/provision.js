@@ -4,12 +4,12 @@ const { hashPassword } = require('./passwords');
 // Admin-only bootstrap. Never expose account claiming or role selection to a browser.
 // Existing IDs, email addresses and state documents are preserved.
 async function provisionAccounts(pool) {
-  const passwordKeys = ['AADARSH_INITIAL_PASSWORD', 'RITHIKA_INITIAL_PASSWORD'];
+  const passwordKeys = ['AADARSH_INITIAL_PASSWORD', 'RITHIKA_INITIAL_PASSWORD', 'TEST_USER_INITIAL_PASSWORD'];
   const passwords = passwordKeys.map(key => process.env[key]);
   if (!passwords.some(Boolean)) return;
-  if (passwords.some(p => !p || p.length < 8 || p.length > 128)) {
+  if (passwords.some(p => p && (p.length < 8 || p.length > 128))) {
     const invalid = passwords.flatMap((password, index) =>
-      !password || password.length < 8 || password.length > 128
+      password && (password.length < 8 || password.length > 128)
         ? [`${passwordKeys[index]}: ${password === undefined ? 'missing' : `${password.length} characters`}`]
         : []);
     throw new Error(`Initial account password configuration invalid (${invalid.join('; ')}). Expected 8–128 characters each.`);
@@ -21,13 +21,13 @@ async function provisionAccounts(pool) {
     const { rows: users } = await client.query('SELECT id, username FROM users ORDER BY created_at');
     const existingOwner = users.find(u => u.username === 'aadarsh');
     const unclaimed = users.filter(u => !u.username);
-    if (!existingOwner && unclaimed.length > 1) {
+    if (passwords[0] && !existingOwner && unclaimed.length > 1) {
       throw new Error('Multiple legacy accounts exist; an administrator must identify Aadarsh before provisioning. No data was changed.');
     }
-    for (const [index, username] of ['aadarsh', 'rithika'].entries()) {
-      if (users.some(u => u.username === username)) continue;
-      const displayName = index === 0 ? 'Aadarsh' : 'Rithika';
-      const role = index === 0 ? 'student_nst' : 'student_worksheet';
+    for (const [index, username] of ['aadarsh', 'rithika', 'test_user'].entries()) {
+      if (!passwords[index] || users.some(u => u.username === username)) continue;
+      const displayName = ['Aadarsh', 'Rithika', 'Test User'][index];
+      const role = index === 1 ? 'student_worksheet' : 'student_nst';
       const old = index === 0 ? unclaimed[0] : null;
       const id = old?.id || crypto.randomUUID();
       if (old) {

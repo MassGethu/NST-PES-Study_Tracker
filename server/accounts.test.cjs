@@ -24,10 +24,11 @@ test('real accounts preserve legacy ownership and isolate server state', { skip:
     await getPool().query('INSERT INTO user_states(user_id,state,version) VALUES($1,$2,7)', [id, original]);
     process.env.AADARSH_INITIAL_PASSWORD = 'Test-Aadarsh-Only-2026';
     process.env.RITHIKA_INITIAL_PASSWORD = 'Test-Rithika-Only-2026';
+    process.env.TEST_USER_INITIAL_PASSWORD = 'Friends-Test-Only-2026';
     await initializeDatabase();
     await initializeDatabase();
     assert.deepEqual((await getPool().query('SELECT state FROM user_states WHERE user_id=$1', [id])).rows[0].state, original);
-    assert.equal((await getPool().query('SELECT count(*) FROM users')).rows[0].count, '2');
+    assert.equal((await getPool().query('SELECT count(*) FROM users')).rows[0].count, '3');
     const { app } = require('./server');
     server = await new Promise(resolve => { const instance = app.listen(0, '127.0.0.1', () => resolve(instance)); });
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -41,6 +42,11 @@ test('real accounts preserve legacy ownership and isolate server state', { skip:
     assert.equal((await login('aadarsh', 'wrong')).status, 401);
     const a = await login('Aadarsh', process.env.AADARSH_INITIAL_PASSWORD);
     const r = await login('rithika', process.env.RITHIKA_INITIAL_PASSWORD);
+    const t = await login('test_user', process.env.TEST_USER_INITIAL_PASSWORD);
+    assert.equal(t.status, 200);
+    assert.equal(t.body.user.role, 'student_nst');
+    assert.notEqual(t.body.user.id, id);
+    assert.equal((await call('/api/state', { cookie: t.cookie })).body.state, null);
     assert.equal(a.body.user.id, id);
     assert.equal(a.body.user.role, 'student_nst');
     assert.equal(r.body.user.role, 'student_worksheet');

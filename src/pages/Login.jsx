@@ -14,11 +14,11 @@ export default function Login() {
     <div className="logo-icon" style={{ marginBottom: 20 }}>N</div>
     <h1>Welcome back</h1>
     <p style={{ margin: '12px 0 24px' }}>Your own space to learn, plan and make progress.</p>
-    <div className="flex gap-3" style={{ marginBottom: 24 }}>
-      {['aadarsh', 'rithika'].map(name => <button key={name} type="button" aria-pressed={username === name}
+    <div className="flex gap-3" style={{ marginBottom: 24, flexWrap: 'wrap' }}>
+      {['aadarsh', 'rithika', 'test_user'].map(name => <button key={name} type="button" aria-pressed={username === name}
         className={`btn ${username === name ? 'btn-primary' : 'btn-secondary'}`}
         disabled={busy} onClick={() => { setUsername(name); setPassword(''); }}>
-        {name === 'aadarsh' ? 'Aadarsh' : 'Rithika'}
+        {{ aadarsh: 'Aadarsh', rithika: 'Rithika', test_user: 'Test User' }[name]}
       </button>)}
     </div>
     <form className="flex flex-col gap-4" onSubmit={async event => {

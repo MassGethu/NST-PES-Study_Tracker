@@ -5,7 +5,7 @@ export const HACKATHON_STATUSES = [
 export const EVENT_FIELDS = ['registrationDeadline', 'deadline', 'domains', 'rules', 'prize', 'purpose', 'eligibility', 'teamLimit'];
 export const EVENT_LABELS = { registrationDeadline: 'Registration deadline', deadline: 'Submission deadline', domains: 'Domains', rules: 'Rules', prize: 'Prize', purpose: 'Purpose', eligibility: 'Eligibility', teamLimit: 'Team size' };
 
-export function isHackathonUser(user) { return user?.username?.toLowerCase() === 'aadarsh'; }
+export function isHackathonUser(user) { return ['aadarsh', 'test_user'].includes(user?.username?.toLowerCase()); }
 export function officialUrl(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : ''; }
   catch { return ''; }

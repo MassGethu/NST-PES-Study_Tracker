@@ -29,14 +29,23 @@ export default function App() {
 
 function AccountApp() {
   const { account, isWorksheet } = useStore();
+  const isTestUser = account.user?.username?.toLowerCase() === 'test_user';
+  const [testPalette, setTestPalette] = React.useState(() => {
+    try { return localStorage.getItem('tracker:test_user:palette') === 'pink' ? 'pink' : 'dark'; }
+    catch { return 'dark'; }
+  });
+  function changePalette(value) {
+    setTestPalette(value);
+    try { localStorage.setItem('tracker:test_user:palette', value); } catch {}
+  }
   React.useEffect(() => {
-    if (isWorksheet) document.documentElement.dataset.theme = 'worksheet';
+    if (isWorksheet || (isTestUser && testPalette === 'pink')) document.documentElement.dataset.theme = 'worksheet';
     else delete document.documentElement.dataset.theme;
     return () => { delete document.documentElement.dataset.theme; };
-  }, [isWorksheet]);
+  }, [isWorksheet, isTestUser, testPalette]);
   if (account.status !== 'signed-in') return <Login />;
   return (
-        <Layout>
+        <Layout palette={testPalette} onPaletteChange={isTestUser ? changePalette : undefined}>
           <Routes>
             <Route path="/"         element={<Dashboard />} />
             <Route path="/hackathons/ideas" element={isHackathonUser(account.user) ? <HackathonIdeas /> : <Navigate to="/" replace />} />

@@ -111,3 +111,10 @@ test('idea bank persists, merges and protects originals from conflicting imports
   assert.equal(mergeImport(original, original).hackathonIdeas.length, 1);
   assert.throws(() => mergeImport(original, { ...original, hackathonIdeas: [{ ...idea, description: 'Different' }] }), /different content/);
 });
+
+test('test_user has the same hackathon access as Aadarsh', () => {
+  assert.equal(isHackathonUser({ username: 'test_user' }), true);
+  assert.equal(isHackathonUser({ username: 'rithika' }), false);
+  const row = newHackathon('friend-event', 'Friend event', 'https://example.com/event');
+  assert.equal(validateHackathons([row], { username: 'test_user' }), '');
+});

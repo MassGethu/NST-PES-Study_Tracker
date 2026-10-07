@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../store/StoreContext.jsx';
 import { worksheetsDueThisWeek } from '../store/worksheets.js';
 import HackathonDeadlineSummary from '../components/HackathonDeadlineSummary.jsx';
+import { isHackathonUser } from '../store/hackathons.js';
 import ChecklistBlock from '../components/ChecklistBlock.jsx';
-import RevisionRow from '../components/RevisionRow.jsx';
 import ConfidenceGauge from '../components/ConfidenceGauge.jsx';
 import { fmtDate, daysUntil, getMondayOf, today, addDays, understoodStatus } from '../store/utils.js';
 
@@ -292,7 +292,7 @@ function WorksheetDueCard({ state, date }) {
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { state, derived, dispatch, isWorksheet } = useStore();
+  const { state, derived, dispatch, isWorksheet, account } = useStore();
 
   const {
     activeContest,
@@ -321,8 +321,11 @@ export default function Dashboard() {
   const mustItems        = getChecklistForDate(viewDate, 'must');
   const optionalItems    = getChecklistForDate(viewDate, 'optional');
   const activityItems    = getActivitiesForDate(viewDate);
-  const revisionDue      = getRevisionDueForDate(viewDate).slice(0, 6);
   const fullRevisionDue  = getRevisionDueForDate(viewDate);
+  const revisionBySubject = fullRevisionDue.reduce((counts, topic) => {
+    counts.set(topic.subjectId, (counts.get(topic.subjectId) || 0) + 1);
+    return counts;
+  }, new Map());
 
   // Contest
   const contestTopics  = activeContest ? getContestTopics(activeContest) : [];
@@ -346,9 +349,9 @@ export default function Dashboard() {
               {contestSubject && <> — <span style={{ color: contestSubject.color, fontWeight: 600 }}>{contestSubject.name}</span></>}
             </p>
           </div>
-          <Link to="/lecture/new" className="btn btn-primary">
-            + Log Lecture
-          </Link>
+          {isHackathonUser(account.user) ? <HackathonDeadlineSummary /> : (
+            <Link to="/lecture/new" className="btn btn-primary">+ Log Lecture</Link>
+          )}
         </div>
 
         {/* ── Day Switcher ──────────────────────────────────────────────── */}
@@ -424,8 +427,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <HackathonDeadlineSummary />
-
       {/* ── Dashboard Grid ───────────────────────────────────────────────── */}
       <div className="dashboard-grid">
 
@@ -459,13 +460,9 @@ export default function Dashboard() {
         <div className="card">
           <div className="card-header">
             <span className="card-title">🔄 Revision Due</span>
-            {fullRevisionDue.length > 6 && (
-              <Link to="/revision" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                +{fullRevisionDue.length - 6} more
-              </Link>
-            )}
+            <span className="badge badge-muted">{fullRevisionDue.length}</span>
           </div>
-          {revisionDue.length === 0 ? (
+          {fullRevisionDue.length === 0 ? (
             <div className="empty-state" style={{ padding: 'var(--space-6)' }}>
               <span className="es-icon">🎉</span>
               <span className="es-text">
@@ -473,8 +470,13 @@ export default function Dashboard() {
               </span>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {revisionDue.map(t => <RevisionRow key={t.id} topic={t} compact />)}
+            <div className="revision-subject-list">
+              {[...revisionBySubject].map(([subjectId, count]) => (
+                <Link className="revision-subject-link" to="/revision" key={subjectId ?? 'unknown'}>
+                  <span>{getSubject(subjectId)?.name || 'Archived subject'}</span>
+                  <strong>{count} lecture{count === 1 ? '' : 's'}</strong>
+                </Link>
+              ))}
             </div>
           )}
         </div>
