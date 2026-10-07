@@ -61,7 +61,7 @@ export default function Layout({ children, palette, onPaletteChange }) {
           <PageTitle />
           <div className="top-bar-actions">
             {onPaletteChange && <label className="palette-picker"><span>🎨</span><select aria-label="Colour palette" value={palette} onChange={event => onPaletteChange(event.target.value)}>
-              <option value="dark">Dark indigo</option><option value="pink">Rithika’s pink</option>
+              <option value="dark">Dark indigo</option><option value="pink">pink</option>
             </select></label>}
             <span className="today-badge">{todayStr}</span>
           </div>
