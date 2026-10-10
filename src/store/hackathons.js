@@ -34,6 +34,14 @@ export function sortedHackathons(rows = [], archived = false) {
   return rows.filter(row => Boolean(row.archived) === archived)
     .sort((a, b) => (Date.parse(hackathonDeadline(a).value) || Infinity) - (Date.parse(hackathonDeadline(b).value) || Infinity));
 }
+export function hackathonsForTab(rows = [], tab = 'current') {
+  return sortedHackathons(rows, tab === 'archived').filter(row => {
+    if (tab === 'archived') return true;
+    if (tab === 'submitted') return row.status === 'Submitted';
+    if (tab === 'registered') return row.status !== 'Registration Pending' && row.status !== 'Submitted';
+    return row.status === 'Registration Pending';
+  });
+}
 export function localDeadline(value) {
   if (!value) return '';
   const date = new Date(value);

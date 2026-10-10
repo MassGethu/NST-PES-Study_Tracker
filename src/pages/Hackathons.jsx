@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/StoreContext.jsx';
 import { uuid } from '../store/utils.js';
-import { newHackathon, validateHackathon, sortedHackathons, formatDeadline, hackathonDeadline, officialUrl } from '../store/hackathons.js';
+import { newHackathon, validateHackathon, hackathonsForTab, formatDeadline, hackathonDeadline, officialUrl } from '../store/hackathons.js';
 import { previewHackathonImport } from '../store/hackathonImport.js';
 
 export default function Hackathons() {
@@ -45,9 +45,7 @@ export default function Hackathons() {
     } catch (error) { setImportError(error.message || 'Could not read this Excel workbook.'); }
     finally { setImporting(false); }
   }
-  const rows = sortedHackathons(all, filter === 'archived').filter(row =>
-    (filter !== 'submitted' || row.status === 'Submitted') &&
-    (filter !== 'current' || row.status !== 'Submitted') &&
+  const rows = hackathonsForTab(all, filter).filter(row =>
     `${row.name} ${row.domains || ''}`.toLowerCase().includes(search.toLowerCase()));
 
   return <div className="hackathon-manager">
@@ -85,7 +83,7 @@ export default function Hackathons() {
       <div className="flex gap-2"><button className="btn btn-primary">Save & AI autofill</button><button type="button" className="btn btn-ghost" onClick={() => setAdding(false)}>Cancel</button></div>
     </form>}
     <div className="hackathon-toolbar">
-      <div className="tabs" style={{ marginBottom: 0 }}>{[['current', 'Opportunities'], ['submitted', 'Submitted'], ['archived', 'Archived']].map(([value, label]) => <button key={value} className={`tab${filter === value ? ' active' : ''}`} onClick={() => setFilter(value)}>{label}</button>)}</div>
+      <div className="tabs" style={{ marginBottom: 0 }}>{[['current', 'Opportunities'], ['registered', 'Registered'], ['submitted', 'Submitted'], ['archived', 'Archived']].map(([value, label]) => <button key={value} className={`tab${filter === value ? ' active' : ''}`} onClick={() => setFilter(value)}>{label}</button>)}</div>
       <input aria-label="Search hackathons" placeholder="Search name or domain…" value={search} onChange={e => setSearch(e.target.value)} />
     </div>
     <div className="hackathon-grid">
@@ -105,6 +103,6 @@ export default function Hackathons() {
         </article>;
       })}
     </div>
-    {!rows.length && <div className="card empty-state"><span className="es-icon">🏁</span><p>{search ? 'No matching hackathons.' : 'No hackathons here yet.'}</p>{filter === 'current' && !search && <button className="btn btn-secondary" onClick={() => setAdding(true)}>Save your first opportunity</button>}</div>}
+    {!rows.length && <div className="card empty-state"><span className="es-icon">🏁</span><p>{search ? 'No matching hackathons.' : filter === 'registered' ? 'No registered hackathons in progress.' : 'No hackathons here yet.'}</p>{filter === 'current' && !search && <button className="btn btn-secondary" onClick={() => setAdding(true)}>Save your first opportunity</button>}</div>}
   </div>;
 }

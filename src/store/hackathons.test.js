@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { emptyState, normalizeState, mergeImport, parseBackup, readCache, writeCache } from './accountStorage.js';
-import { isHackathonUser, officialUrl, validateHackathon, sortedHackathons, localDeadline, hackathonDeadline, newHackathon, hackathonReminders, applyHackathonFacts } from './hackathons.js';
+import { isHackathonUser, officialUrl, validateHackathon, sortedHackathons, hackathonsForTab, localDeadline, hackathonDeadline, newHackathon, hackathonReminders, applyHackathonFacts } from './hackathons.js';
 const { validateHackathons } = createRequire(import.meta.url)('../../server/hackathons.js');
 const row = { id: 'h1', name: 'Hack', url: 'https://example.com', deadline: '2026-10-05T12:00:00.000Z', idea: '', status: 'Registered', notes: '', archived: false };
 
@@ -27,6 +27,20 @@ test('deadline sorting retains past deadlines and submitted entries, and separat
   assert.deepEqual(sortedHackathons(rows).map(row => row.id), ['old', 'h1', 'done']);
   assert.deepEqual(sortedHackathons(rows, true).map(row => row.id), ['archive']);
   assert.equal(new Date(localDeadline(row.deadline)).getTime(), Date.parse(row.deadline));
+});
+
+test('registered tab includes active work stages and orders them by submission deadline', () => {
+  const rows = [
+    { ...row, id: 'pending', status: 'Registration Pending' },
+    { ...row, id: 'building', status: 'Building', deadline: '2026-10-03T12:00:00Z' },
+    { ...row, id: 'registered' },
+    { ...row, id: 'done', status: 'Submitted' },
+    { ...row, id: 'archived', archived: true },
+  ];
+  assert.deepEqual(hackathonsForTab(rows, 'current').map(item => item.id), ['pending']);
+  assert.deepEqual(hackathonsForTab(rows, 'registered').map(item => item.id), ['building', 'registered']);
+  assert.deepEqual(hackathonsForTab(rows, 'submitted').map(item => item.id), ['done']);
+  assert.deepEqual(hackathonsForTab(rows, 'archived').map(item => item.id), ['archived']);
 });
 
 test('only Aadarsh gets hackathons and server rejects unsafe or malformed data', () => {
