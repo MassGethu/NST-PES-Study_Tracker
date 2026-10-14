@@ -1357,13 +1357,20 @@ select option { background: var(--bg-card); }
 .dashboard-header-widgets { display: flex; align-items: center; gap: var(--space-4); max-width: 100%; }
 .contest-countdown {
   width: 82px; height: 82px; flex: 0 0 82px; border-radius: 50%;
-  border: 3px solid var(--accent-light); color: var(--text-primary);
-  background: transparent; box-shadow: 0 0 18px var(--accent-glow), inset 0 0 12px var(--accent-glow);
+  position: relative; color: var(--text-primary); background: transparent;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
 .contest-countdown strong { font-size: 1.65rem; line-height: 1.1; }
 .contest-countdown span { font-size: .6rem; color: var(--text-secondary); }
-.contest-countdown:hover { color: var(--accent-light); box-shadow: 0 0 26px var(--accent-glow); }
+.contest-countdown svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); pointer-events: none; }
+.contest-countdown circle { fill: none; stroke-width: 3; }
+.contest-ring-track { stroke: var(--border); }
+.contest-ring-progress {
+  stroke: var(--confidence-colour); stroke-linecap: round;
+  filter: drop-shadow(0 0 var(--confidence-glow) var(--confidence-colour));
+  transition: stroke-dashoffset .5s ease, stroke .3s ease, filter .3s ease;
+}
+.contest-countdown:hover { color: var(--confidence-colour); }
 .contest-countdown:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
 .dashboard-scroll-list:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 480px) {

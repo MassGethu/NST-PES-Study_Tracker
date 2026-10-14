@@ -145,9 +145,19 @@ function WeeklyTasksCard({ tasks, weekStart, dispatch }) {
 }
 
 // A compact link keeps the Friday countdown visible without a surrounding card.
-function ContestCountdown({ days }) {
+function ContestCountdown({ days, confidence, hasContest }) {
+  const pct = Math.min(100, Math.max(0, Number(confidence) || 0));
+  const colour = !hasContest ? 'var(--text-muted)' : pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)';
+  const circumference = 2 * Math.PI * 37;
   return <Link to="/contest" className="contest-countdown"
-    aria-label={`${days === 0 ? 'Contest today' : `${days} days until Friday`}. Open contest tracker`}>
+    style={{ '--confidence-colour': colour, '--confidence-glow': `${8 + pct * .12}px` }}
+    title={hasContest ? `Contest confidence: ${pct}%` : 'Set this week’s contest subject'}
+    aria-label={`${days === 0 ? 'Contest today' : `${days} days until Friday`}. ${hasContest ? `Confidence ${pct}%` : 'No contest configured'}. Open contest tracker`}>
+    <svg viewBox="0 0 82 82" aria-hidden="true">
+      <circle cx="41" cy="41" r="37" className="contest-ring-track" />
+      {hasContest && pct > 0 && <circle cx="41" cy="41" r="37" className="contest-ring-progress"
+        strokeDasharray={circumference} strokeDashoffset={circumference * (1 - pct / 100)} />}
+    </svg>
     <strong>{days}</strong><span>{days === 0 ? 'Today' : days === 1 ? 'day to Friday' : 'days to Friday'}</span>
   </Link>;
 }
@@ -250,6 +260,8 @@ export default function Dashboard() {
 
   const {
     activeContest,
+    getContestTopics,
+    getContestConfidence,
     getSubject,
     getChecklistForDate,
     getActivitiesForDate,
@@ -279,6 +291,8 @@ export default function Dashboard() {
   }, new Map());
 
   // Contest
+  const contestTopics = activeContest ? getContestTopics(activeContest) : [];
+  const contestConf = activeContest?.manualConfidenceOverride ?? getContestConfidence(contestTopics);
   const contestSubject = activeContest ? getSubject(activeContest.subjectId) : null;
   const contestDuf     = daysUntilFridayFrom(viewDate);
 
@@ -299,7 +313,7 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="dashboard-header-widgets">
-            {!isWorksheet && <ContestCountdown days={contestDuf} />}
+            {!isWorksheet && <ContestCountdown days={contestDuf} confidence={contestConf} hasContest={Boolean(activeContest)} />}
             {isHackathonUser(account.user) ? <HackathonDeadlineSummary /> : (
               <Link to="/lecture/new" className="btn btn-primary">+ Log Lecture</Link>
             )}
