@@ -5,7 +5,6 @@ import { worksheetsDueThisWeek } from '../store/worksheets.js';
 import HackathonDeadlineSummary from '../components/HackathonDeadlineSummary.jsx';
 import { isHackathonUser } from '../store/hackathons.js';
 import ChecklistBlock from '../components/ChecklistBlock.jsx';
-import ConfidenceGauge from '../components/ConfidenceGauge.jsx';
 import { fmtDate, daysUntil, getMondayOf, today, addDays, understoodStatus } from '../store/utils.js';
 
 // ── Helper: Days until Friday from a given date ────────────────────────────
@@ -63,7 +62,7 @@ function WeeklyTasksCard({ tasks, weekStart, dispatch }) {
   }
 
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+    <div className="card weekly-tasks-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       {/* Header */}
       <div className="card-header" style={{ marginBottom: 0 }}>
         <span className="card-title">📋 Weekly To-Do</span>
@@ -90,7 +89,7 @@ function WeeklyTasksCard({ tasks, weekStart, dispatch }) {
       )}
 
       {/* Task list */}
-      <div className="checklist" style={{ gap: 'var(--space-2)', display: 'flex', flexDirection: 'column' }}>
+      <div className="checklist dashboard-scroll-list" tabIndex={0} role="region" aria-label="Weekly tasks" style={{ gap: 'var(--space-2)', display: 'flex', flexDirection: 'column' }}>
         {tasks.length === 0 && (
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: 'var(--space-1) 0' }}>
             No tasks yet for this week — add one below!
@@ -145,57 +144,12 @@ function WeeklyTasksCard({ tasks, weekStart, dispatch }) {
   );
 }
 
-// ── Compact Contest Widget ─────────────────────────────────────────────────
-function CompactContestCard({ activeContest, contestSubject, contestConf, contestTopics, duf }) {
-  return (
-    <div
-      className="card"
-      style={{
-        borderColor: contestSubject ? contestSubject.color + '44' : undefined,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-3)',
-      }}
-    >
-      <div className="card-header" style={{ marginBottom: 0 }}>
-        <span className="card-title">🏆 Contest Prep</span>
-        {contestSubject && (
-          <span className="badge" style={{ background: contestSubject.color + '22', color: contestSubject.color, fontSize: '0.7rem' }}>
-            {contestSubject.name}
-          </span>
-        )}
-      </div>
-
-      {!activeContest ? (
-        <Link to="/contest" className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start', fontSize: '0.78rem' }}>
-          Set this week's subject →
-        </Link>
-      ) : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <ConfidenceGauge pct={contestConf} size={54} label="" />
-          <div style={{ flex: 1 }}>
-            <div style={{
-              fontSize: '1.1rem',
-              fontWeight: 700,
-              color: contestConf >= 70 ? 'var(--green)' : contestConf >= 40 ? 'var(--yellow)' : 'var(--red)',
-              lineHeight: 1.1,
-            }}>
-              {contestConf}%
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-              {contestTopics.length} topic{contestTopics.length !== 1 ? 's' : ''} · {activeContest.problemsSolved} solved
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>
-              {duf === 0 ? '🏆 TODAY!' : `${duf}d to Friday`}
-            </div>
-            <Link to="/contest" style={{ fontSize: '0.72rem', color: 'var(--text-accent)', marginTop: 2, display: 'inline-block' }}>
-              Full view →
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+// A compact link keeps the Friday countdown visible without a surrounding card.
+function ContestCountdown({ days }) {
+  return <Link to="/contest" className="contest-countdown"
+    aria-label={`${days === 0 ? 'Contest today' : `${days} days until Friday`}. Open contest tracker`}>
+    <strong>{days}</strong><span>{days === 0 ? 'Today' : days === 1 ? 'day to Friday' : 'days to Friday'}</span>
+  </Link>;
 }
 
 // ── Activities list (date-aware) ──────────────────────────────────────────
@@ -296,9 +250,6 @@ export default function Dashboard() {
 
   const {
     activeContest,
-    daysUntilFriday: duf,
-    getContestTopics,
-    getContestConfidence,
     getSubject,
     getChecklistForDate,
     getActivitiesForDate,
@@ -328,8 +279,6 @@ export default function Dashboard() {
   }, new Map());
 
   // Contest
-  const contestTopics  = activeContest ? getContestTopics(activeContest) : [];
-  const contestConf    = activeContest?.manualConfidenceOverride ?? getContestConfidence(contestTopics);
   const contestSubject = activeContest ? getSubject(activeContest.subjectId) : null;
   const contestDuf     = daysUntilFridayFrom(viewDate);
 
@@ -349,9 +298,12 @@ export default function Dashboard() {
               {contestSubject && <> — <span style={{ color: contestSubject.color, fontWeight: 600 }}>{contestSubject.name}</span></>}
             </p>
           </div>
-          {isHackathonUser(account.user) ? <HackathonDeadlineSummary /> : (
-            <Link to="/lecture/new" className="btn btn-primary">+ Log Lecture</Link>
-          )}
+          <div className="dashboard-header-widgets">
+            {!isWorksheet && <ContestCountdown days={contestDuf} />}
+            {isHackathonUser(account.user) ? <HackathonDeadlineSummary /> : (
+              <Link to="/lecture/new" className="btn btn-primary">+ Log Lecture</Link>
+            )}
+          </div>
         </div>
 
         {/* ── Day Switcher ──────────────────────────────────────────────── */}
@@ -440,15 +392,19 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Right column: Compact Contest + Weekly Tasks stacked */}
+        {/* Right column: Activities + Weekly Tasks stacked */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {isWorksheet ? <WorksheetDueCard state={state} date={viewDate} /> : <CompactContestCard
-            activeContest={activeContest}
-            contestSubject={contestSubject}
-            contestConf={contestConf}
-            contestTopics={contestTopics}
-            duf={contestDuf}
-          />}
+          {isWorksheet && <WorksheetDueCard state={state} date={viewDate} />}
+          {/* Activities & Reminders */}
+          <div className="card dashboard-activities-card">
+            <div className="card-header" style={{ marginBottom: 'var(--space-3)' }}>
+              <span className="card-title">🏃 Activities &amp; Reminders</span>
+              <span className="badge badge-muted">
+                {activityItems.filter(a => a.done).length}/{activityItems.length}
+              </span>
+            </div>
+            <ActivitiesList activities={activityItems} dispatch={dispatch} />
+          </div>
           <WeeklyTasksCard
             tasks={weeklyTasks}
             weekStart={weekStart}
@@ -489,17 +445,6 @@ export default function Dashboard() {
             title="⭐ Optional / Practice"
             emptyText="e.g. Codeforces problem, extra reading…"
           />
-        </div>
-
-        {/* Activities & Reminders — full width */}
-        <div className="card full-width">
-          <div className="card-header" style={{ marginBottom: 'var(--space-3)' }}>
-            <span className="card-title">🏃 Activities &amp; Reminders</span>
-            <span className="badge badge-muted">
-              {activityItems.filter(a => a.done).length}/{activityItems.length}
-            </span>
-          </div>
-          <ActivitiesList activities={activityItems} dispatch={dispatch} />
         </div>
 
       </div>
